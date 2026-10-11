@@ -12,7 +12,11 @@ from machine import Pin, I2C
 
 
 def validate_transform(axes, signs):
-    if sorted(axes) != [0, 1, 2] or any(s not in (-1, 1) for s in signs):
+    if (not isinstance(axes, (list, tuple)) or not isinstance(signs, (list, tuple)) or
+            len(axes) != 3 or len(signs) != 3 or
+            any(type(axis) is not int for axis in axes) or
+            any(type(sign) is not int for sign in signs) or
+            sorted(axes) != [0, 1, 2] or any(s not in (-1, 1) for s in signs)):
         raise ValueError('Ungueltige Sensorachsenzuordnung')
     inversions = sum(axes[i] > axes[j] for i in range(3) for j in range(i+1, 3))
     if ((-1) ** inversions) * signs[0] * signs[1] * signs[2] != 1:

@@ -12,6 +12,9 @@ den Euler-Regler ungeeignet und wird von der Betriebslogik behandelt.
 """
 import math
 
+# Gemeinsame Obergrenze fuer Filter und Konfigurationspruefung in app.py.
+MAX_DT_S = 0.05
+
 
 def clamp(value, low, high):
     return min(high, max(low, value))
@@ -64,7 +67,7 @@ class Attitude:
         self.q = (cr*cp, sr*cp, cr*sp, -sr*sp)
 
     def update(self, sample, dt):
-        if not 0 < dt <= 0.05 or any(not math.isfinite(v) for v in sample):
+        if not 0 < dt <= MAX_DT_S or any(not math.isfinite(v) for v in sample):
             raise ValueError('Ungueltiger Filter-Zeitschritt/Messwert')
         ax, ay, az, gx, gy, gz = sample
         gx, gy, gz = [math.radians(v) for v in (gx, gy, gz)]

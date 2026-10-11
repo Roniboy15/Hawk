@@ -1,7 +1,12 @@
-# Validierung — v0.2.0-bench
+# Validierung — v0.2.1-bench
 
-24 automatische Hosttests bestanden. Alle Firmwaredateien werden zusaetzlich
-auf Python-Syntax geprueft. Testausfuehrung: python3 -m unittest discover -s tests -v.
+Hostlauf am 2026-10-11: 51 automatische Tests bestanden, CPython 3.9.6.
+Alle 13 Firmwaredateien werden zusaetzlich per AST im RAM auf Python-Syntax
+geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
 
 ## Geprueft
 
@@ -13,12 +18,23 @@ auf Python-Syntax geprueft. Testausfuehrung: python3 -m unittest discover -s tes
 - Vorzeichen der Beschleunigungs-Driftkorrektur.
 - Quaternionfehler im Koerperrahmen bei kombiniertem Roll/Nick.
 - Begrenzte Servoausgaenge inklusive Trim und Vorzeichen.
-- Anti-Windup und Reset-Verhalten der Regler.
+- Symmetrische Anti-Windup-Grenzen der Regler (kein Trim/I-Integrationstest).
 - Kalibrierdatei-Roundtrip und ungueltige Kalibrierungen/Transformationen.
 - Begrenzter Logring und Reihenfolge.
 - Echte app.run()-Zustandslogik mit simulierten Hardwaremodulen:
   Startfreigabe, Steuerkommando, Sensorfehler, RX-Verlust und Timingfehler.
 - SENSOR-Modus ohne PWM, gemeinsame Roll-/Nickausgaenge, Gier-Sollrate.
+- Echte Receiver.poll()-Logik mit simuliertem PIO-FIFO: unbekannter Startpuffer,
+  konservatives Alter, Pollpause, voller FIFO, ungueltige Pulse, Tick-Umlauf
+  und begrenztes Lesen auch bei gleichzeitig eintreffenden Worten.
+- Verzoegerter Read: bereits der erste Ausgang nach Rueckkehr ist neutral;
+  neue Neutralframes erlauben manuellen Ersatz, aber keine erneute Automatik.
+- Verzoegerte RC-/Reglerrechnung startet keine PWM; langsamer PWM-Start wird
+  nach Rueckkehr neutralisiert. MANUAL/SENSOR behandeln Zeitverlust ebenfalls.
+- Ungueltige Scheduler-/Regler-/Sensorparameter und NaN-Trim werden abgelehnt;
+  Fehlkonfiguration verhindert jede Hardware-Konstruktion im App-Start.
+- Ctrl+C bei partiellem PWM-/PIO-Start und Cleanupfehler: weitere Abschaltversuche,
+  Receiver-Abschaltung nach PWM-Fehler, kein falscher Erfolg/Flash-Logexport.
 
 ## Nicht auf Hardware geprueft
 
@@ -29,7 +45,13 @@ auf Python-Syntax geprueft. Testausfuehrung: python3 -m unittest discover -s tes
 - Reale Ruderwirkungen und mechanische Grenzen.
 - Flugzeugdynamik, Kurvenflug, Stall, Hoehen-/Energieverhalten.
 - Funkverlust, Reichweite, Antenne und Verhalten bei gehaltenen RX-Pulsen.
+- PIO-Neustart/FIFO-Leerung auf dem Board, insbesondere bei anliegender High-Phase.
+- Garantierte Reaktionszeit bei permanentem Bus-/CPU-Haenger oder fehlerhafter
+  PWM-Abschaltung; unabhaengiger Hardware-Bypass fehlt.
+- Nick-Vorzeichenkonvention und Anti-Windup bei Servo-Trim plus nonzero rate_i
+  sind noch offen. Fuer den Roll-Tischtest rate_i=0 belassen.
 
 Ein bestandener Hosttest ist kein Flugtest. Der konkrete Upload beginnt
 deshalb mit SENSOR, nur Roll aktiv, dann MANUAL, dann STABILIZE.
-Nick/Gier erst schrittweise aktivieren. Keine Aussagen zur Flugtauglichkeit.
+Siehe [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md). Nick-Vorzeichen zuerst aufloesen,
+weitere Achsen anschliessend schrittweise aktivieren. Keine Aussagen zur Flugtauglichkeit.

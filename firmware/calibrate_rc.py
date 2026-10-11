@@ -2,7 +2,7 @@
 
 Hauptfunktionen collect() sammelt nur neue Pulse; run() fuehrt pro aktivem
 Kanal durch Mitte und Endpunkte. Sender normal konfigurieren, Trimmung fuer
-dieses Projekt mittig; gas bleibt getrennt. Keine Servo-PWM wird aktiviert.
+dieses Projekt mittig. Dieser Segler hat kein Gas. Keine Servo-PWM wird aktiviert.
 Gespeicherte Werte gelten fuer diese Senderkonfiguration. Spätere
 Sendertrimmung verschiebt weiterhin das Kommando, nicht die gespeicherte Mitte.
 """
@@ -32,7 +32,8 @@ def collect(receiver, axis, duration_ms):
 
 def run():
     data = load(cfg.CALIBRATION_FILE)
-    receiver = Receiver(cfg.RECEIVER, cfg.ACTIVE_AXES, cfg.RX_TIMEOUT_MS)
+    receiver = Receiver(cfg.RECEIVER, cfg.ACTIVE_AXES, cfg.RX_TIMEOUT_MS,
+                        max_poll_ms=(cfg.MAX_LOOP_US+999)//1000)
     try:
         for axis in cfg.ACTIVE_AXES:
             input(axis+': Knueppel mittig loslassen, dann Enter: ')

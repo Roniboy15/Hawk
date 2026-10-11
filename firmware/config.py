@@ -9,13 +9,13 @@ Roll = atan2(ay, az), Nick = atan2(-ax, sqrt(ay^2+az^2)).
 Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 """
 
-VERSION = '0.2.0-bench'
+VERSION = '0.2.1-bench'
 AUTO_START = False
 START_MODE = 'sensor'             # sensor / manual / stabilize
 ACTIVE_AXES = ('roll',)            # danach ('roll', 'pitch'), spaeter 'yaw'
 ALLOW_ID72_BENCH = True            # fuer diesen getesteten Sensor, kein Typnachweis
 LOOP_US = 10000
-MAX_LOOP_US = 50000
+MAX_LOOP_US = 50000                # auch RX-Pollbudget; <= attitude.MAX_DT_S
 CALIBRATION_FILE = 'calibration.json'
 
 SENSOR = {'sda': 4, 'scl': 5, 'freq': 100000,
@@ -26,7 +26,7 @@ GYRO_STD_MAX = 1.0
 ATTITUDE_ACCEL_GAIN = 1.0          # Gravitation nur schwach zur Driftkorrektur
 PITCH_CONTROL_LIMIT_DEG = 75.0    # Euler-Reglerbereich, keine Sensorgrenze
 
-# RX-Signale nur 3,3-V-kompatibel an GPIO! CH3 Gas bleibt ausserhalb MCU.
+# RX-Signale nur 3,3-V-kompatibel an GPIO! Dieser Segler hat kein Gas/Triebwerk.
 # GP-Nummern, NICHT physische Pinpositionen. GP3 bleibt Y-Querruder-Ausgang.
 RECEIVER = {'roll': {'pin': 2, 'sign': 1},
             'pitch': {'pin': 8, 'sign': 1},

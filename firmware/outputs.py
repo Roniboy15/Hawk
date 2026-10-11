@@ -26,8 +26,12 @@ class Outputs:
                 cfg = settings[axis]
                 self.devices[axis] = PWM(Pin(cfg['pin']), freq=50,
                                         duty_ns=command(0, cfg)*1000)
-        except Exception:
-            self.close()
+        except BaseException:
+            # Auch ein Stop per Ctrl+C waehrend des Starts muss Teil-PWM stoppen.
+            try:
+                self.close()
+            except BaseException:
+                pass  # Startursache erhalten; app verbietet dann den Logexport.
             raise
 
     def write(self, offsets):
@@ -42,6 +46,24 @@ class Outputs:
         return self.write({})
 
     def close(self):
+        error = None
         for axis, device in self.devices.items():
-            device.deinit()
-            Pin(self.settings[axis]['pin'], Pin.OUT, value=0)
+            # Jede Massnahme und jede Achse versuchen, auch wenn eine scheitert.
+            # 0 Duty und GPIO-low sind weitere Abschaltversuche, kein HW-Bypass.
+            try:
+                device.duty_ns(0)
+            except BaseException as current:
+                if error is None:
+                    error = current
+            try:
+                device.deinit()
+            except BaseException as current:
+                if error is None:
+                    error = current
+            try:
+                Pin(self.settings[axis]['pin'], Pin.OUT, value=0)
+            except BaseException as current:
+                if error is None:
+                    error = current
+        if error is not None:
+            raise error

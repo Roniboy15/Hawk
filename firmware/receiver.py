@@ -7,6 +7,8 @@ RC-Kalibrierung. Asymmetrische Wege werden getrennt normiert. Trimmung wird
 als Eingabe sichtbar und nicht heimlich als neue Mitte gelernt.
 Timeout erkennt nur fehlende Pulse, NICHT den Funkverlust, wenn der Receiver
 alte/FailSafe-Pulse weiterliefert. Dies muss separat am Receiver getestet werden.
+FIFO-Worte enthalten keine Zeitstempel: Alter wird konservativ ab dem vorigen
+Poll gerechnet. Nach Pollpause/vollem FIFO erst neue Pulse akzeptieren.
 """
 import time
 from machine import Pin
@@ -45,9 +47,11 @@ def pulse_capture():
 
 
 class Receiver:
-    def __init__(self, settings, axes, timeout_ms):
+    def __init__(self, settings, axes, timeout_ms, max_poll_ms=50):
         self.channels = {}
         self.timeout = timeout_ms
+        self.max_poll_ms = max_poll_ms
+        self.last_poll = None
         try:
             for index, axis in enumerate(axes):
                 pin = Pin(settings[axis]['pin'], Pin.IN, Pin.PULL_DOWN)
@@ -56,27 +60,84 @@ class Receiver:
                 self.channels[axis] = {'sm': sm, 'pulse': None, 'time': None,
                                        'sequence': 0}
                 sm.active(1)
-        except Exception:
-            self.close()
+        except BaseException:
+            # Aufraeumfehler duerfen die eigentliche Startursache nicht verdecken.
+            # Auch Ctrl+C mitten im Start muss bereits aktive PIOs stoppen.
+            try:
+                self.close()
+            except BaseException:
+                pass  # Originalfehler erhalten; app meldet Startabbruch als unbestaetigt.
             raise
 
-    def poll(self, now):
+    def _discard(self, channel):
+        channel['pulse'], channel['time'] = None, None
+        sm = channel['sm']
+        # Stoppen macht das Leeren endlich. restart() allein leert den FIFO
+        # nicht; danach verlangt wait(0)/wait(1) eine neue vollstaendige Flanke.
+        sm.active(0)
+        for _ in range(sm.rx_fifo()):
+            sm.get()
+        sm.restart()
+        sm.active(1)
+
+    def invalidate(self, now):
+        """Unbekannt alte Pulse verwerfen; nichts davon darf erneut freigeben."""
+        self.last_poll = now
+        error = None
         for channel in self.channels.values():
-            while channel['sm'].rx_fifo():
+            try:
+                self._discard(channel)
+            except BaseException as current:
+                if error is None:
+                    error = current
+        if error is not None:
+            raise error
+
+    def poll(self, now):
+        previous = self.last_poll
+        gap = time.ticks_diff(now, previous) if previous is not None else None
+        if gap is None or gap < 0 or gap > self.max_poll_ms:
+            # Auch der erste Poll kann Pulse aus einer langen Initialisierung
+            # enthalten. Keine Verbrauchszeit als vermeintliche Empfangszeit.
+            self.invalidate(now)
+            return
+        self.last_poll = now
+        for channel in self.channels.values():
+            pending = channel['sm'].rx_fifo()
+            if pending >= 4:
+                # Nicht verbundener RX-FIFO: 4 Worte. Bei Fuellung kann push(noblock)
+                # neuere Pulse verloren haben; die alten Werte sind unbrauchbar.
+                self._discard(channel)
+                continue
+            # Nur den Snapshot lesen: auch bei schnellen Eingangsflanken bleibt
+            # dieser Poll begrenzt. Spaetere Worte bleiben fuer den naechsten Poll.
+            for _ in range(pending):
                 pulse = channel['sm'].get()
                 channel['sequence'] += 1
                 if 900 <= pulse <= 2100:
-                    channel['pulse'], channel['time'] = pulse, now
+                    # Die Capture-Zeit liegt nach dem letzten geleerten Snapshot.
+                    # Dessen Zeit ist eine konservative Untergrenze, kein exakter
+                    # Hardwarezeitstempel. So verlaengert Lesen den Timeout nicht.
+                    channel['pulse'], channel['time'] = pulse, previous
                 else:
                     channel['pulse'], channel['time'] = None, None
 
     def fresh(self, axis, now):
         stamp = self.channels[axis]['time']
-        return stamp is not None and time.ticks_diff(now, stamp) < self.timeout
+        return stamp is not None and 0 <= time.ticks_diff(now, stamp) < self.timeout
 
     def all_fresh(self, now):
         return all(self.fresh(axis, now) for axis in self.channels)
 
     def close(self):
+        error = None
         for channel in self.channels.values():
-            channel['sm'].active(0)
+            channel['pulse'], channel['time'] = None, None
+            try:
+                channel['sm'].active(0)
+            except BaseException as current:
+                if error is None:
+                    error = current
+        # Alle Kanaele zuerst versuchen, dann den ersten Fehler weiterreichen.
+        if error is not None:
+            raise error

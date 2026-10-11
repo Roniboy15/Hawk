@@ -1,6 +1,6 @@
 ### 1. Arbeit beginnen
 
-- [ ] Motor/Propeller für den Bodentest deaktivieren.
+- [ ] Beaufsichtigten Tischtest vorbereiten; dieser Segler hat kein Triebwerk/Gas.
 - [ ] Batterie vom BEC trennen, bevor du Kabel umsteckst.
 - [ ] Im Terminal den Projektordner öffnen:
 
@@ -78,6 +78,7 @@
 - [ ] Sender einschalten und richtige Einstellungen prüfen.
 - [ ] BEC/Batterie anschließen; MCU-Versorgung wie geplant herstellen.
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.
+- [ ] Fuer v0.2.1 nur Roll nach [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md) pruefen.
 - [ ] `start_test.py` ausführen.
 - [ ] Während der Gyro-Kalibrierung nichts bewegen.
 - [ ] Knüppel für die Freigabe mittig halten.
@@ -91,6 +92,8 @@
 
 - [ ] Mit **Ctrl+C** stoppen.
 - [ ] Auf **„PWM/PIO ausgeschaltet“** und die Log-Speicherung warten.
+- [ ] Bei **„Abschalten unvollstaendig“** Versorgung trennen und Fehler klaeren;
+  in diesem Fall wird kein Log exportiert.
 - [ ] Benötigte `bench_…csv`-Dateien auf den Mac herunterladen.
 - [ ] **Batterie vom BEC trennen.**
 - [ ] USB trennen, wenn du fertig bist oder umstecken möchtest.

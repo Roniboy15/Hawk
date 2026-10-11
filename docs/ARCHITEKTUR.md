@@ -38,6 +38,39 @@ Dies ist ein Boden-Testzustand, kein fertig definierter Flug-Failsafe.
 Es gibt weder einen in-flight Mode-Schalter noch einen Hardware-Bypass.
 Ein Softwarefallback hilft nicht, wenn MCU oder Bus blockieren.
 
+## Zeitverlust und RC-Alter (v0.2.1)
+
+Der PIO-FIFO liefert Pulsbreiten ohne Capture-Zeitstempel. Bei normalen Polls
+wird der vorige Poll als konservative Zeituntergrenze gespeichert. Das kann
+einen Puls etwas frueher als noetig ablaufen lassen, aber Lesen macht ihn
+nicht kuenstlich jung. Nur der FIFO-Snapshot wird gelesen; neue Worte bleiben
+fuer den naechsten Poll. Der unverknuepfte FIFO hat vier Worte; ein voller FIFO
+wird wegen moeglicher verworfener neuerer Pulse nicht als frischer RX akzeptiert.
+
+Beim ersten Poll, einer negativen Tick-Differenz oder einer Pause ueber dem
+Pollbudget werden PIOs gestoppt, FIFO-Worte verworfen und Capture neu gestartet.
+Neue vollstaendige Pulse sind danach erforderlich. Das Pollbudget wird aus
+MAX_LOOP_US abgeleitet; RX_TIMEOUT_MS muss groesser sein. ticks_diff behandelt
+normalen Zaehlerumlauf; Stillstand ueber die halbe Tickperiode bleibt mehrdeutig.
+
+Die App prueft Startabstand, Laufzeit nach Sensor-/RC-Zugriff und vor PWM-Ausgabe.
+Erkannte Zeitueberschreitung verriegelt TIMING, verwirft RC, setzt die Freigabe
+zurueck und schreibt Trimneutral, sofern PWM bereits aktiv ist. Vor der ersten
+Freigabe bleiben Pulse aus. Erst neue Neutralframes erlauben MANUAL_FALLBACK;
+STABILIZE bleibt bis zum Neustart gesperrt. Ein dauerhaft blockierender Zugriff
+kann weiterhin nicht von dieser Schleife unterbrochen werden.
+
+Abschalten versucht jede PWM-Achse und jeden PIO auch nach einem Fehler.
+PWM versucht Duty=0, deinit und GPIO-low jeweils separat. Teilweiser Startabbruch
+oder Aufraeumfehler verbieten den Logexport und die Erfolgsmeldung. Diagnose
+erfolgt nach den Ausgangs-/Abschaltversuchen. Dies bleibt Software, kein Bypass.
+
+MicroPython-API-Bezug: [StateMachine](https://docs.micropython.org/en/latest/library/rp2.StateMachine.html),
+[PIO/FIFO](https://docs.micropython.org/en/latest/library/rp2.html),
+[Tick-Arithmetik](https://docs.micropython.org/en/latest/library/time.html),
+[PWM](https://docs.micropython.org/en/latest/library/machine.PWM.html).
+Die konkrete installierte MicroPython-Version ist noch zu dokumentieren.
+
 ## Kalibrierung, Referenz, Trimmung
 
 - Accel Offset/Skalierung: die vorlaeufig gemessenen sechs Lagen sind in config.

@@ -78,6 +78,10 @@ erzeugen. Bei Hoehenruder muss positiver Nick-Steuerwert die Nase heben.
 
 ## 6. Roll stabilisiert testen
 
+Fuer v0.2.1 zuerst [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md) durcharbeiten.
+Erkannte Timingfehler verwerfen RX-Puffer und verlangen neue Neutralframes,
+bevor MANUAL_FALLBACK moeglich ist. RX_TIMEOUT/WAIT_NEUTRAL sind dabei erwartbar.
+
 START_MODE='stabilize', Reset, start_test.py. Bei Knueppelmitte links/rechts
 kippen; das Ruder muss entgegenwirken. Anschliessend vorgegebene Neigung
 testen: wenn Istlage=Sollage und keine Drehrate, geht der Ausgang in Trimlage.
@@ -89,6 +93,11 @@ Gyro-/Accel-Saettigung oder Laufzeitfehler ergeben MANUAL_FALLBACK.
 Wiederherstellung der Automatik nur durch Neustart am Boden.
 
 ## 7. Nick erst danach hinzufuegen
+
+**Der folgende Ausbau ist zurueckgestellt, bis die Nick-Vorzeichenkonvention
+aufgeloest und getestet ist. Aktuell nur Roll aktivieren.** Die positive
+Nickvorgabe im bisherigen manuellen Ablauf passt nicht zur beschriebenen
+X-vor/Y-links/Z-oben-Quaternionkonvention; Servozeichen nicht blind uebernehmen.
 
 Strom trennen. CH2-Signal -> GP8, Hoehenrudersignal -> GP6, Servo Plus BEC5V,
 Minus gemeinsame Masse. Eingang vorher auf GPIO-vertraeglichen Pegel bringen.
