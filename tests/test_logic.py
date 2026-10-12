@@ -357,6 +357,19 @@ class PureTests(unittest.TestCase):
         self.assertEqual(command(-500, settings), 1700)
         self.assertEqual(command(500, settings), 1300)
 
+    def test_roll_sign_pair_preserves_manual_and_corrects_bank_targets(self):
+        # Besitzerpruefung: kleinere RX-Pulse = Rechtsknueppel; Rechtsbank = +Roll.
+        # Beispielkalibrierung; keine Kopie der unbekannten MCU-Kalibrierdatei.
+        cal = {'min': 1000, 'center': 1500, 'max': 2000}
+        legacy_servo = dict(config.SERVOS['roll'], sign=1)
+        for pulse, target_sign in ((1000, 1), (2000, -1)):
+            stick = normalize(pulse, cal, config.RECEIVER['roll']['sign'])
+            self.assertGreater(stick*target_sign, 0)
+            actual = command(stick*config.SERVOS['roll']['limit'], config.SERVOS['roll'])
+            legacy = command(normalize(pulse, cal)*legacy_servo['limit'], legacy_servo)
+            self.assertEqual(actual, legacy)
+        self.assertEqual(command(0, config.SERVOS['roll']), 1500)
+
     def test_calibration_roundtrip(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(pathlib.Path(directory)/'calibration.json')
@@ -383,7 +396,8 @@ class FlowTests(unittest.TestCase):
     def simulate(self, scenario, axes=('roll',), mode='stabilize', save_log=False,
                  expected_error=None):
         recorded = []
-        state = {'iteration': 0, 'closed': False, 'write_times': [], 'saved_logs': []}
+        state = {'iteration': 0, 'closed': False, 'write_times': [], 'saved_logs': [],
+                 'pulse_records': []}
 
         class Clock:
             value = (1 << 30)-15000 if scenario == 'wrap' else 1000000
@@ -399,14 +413,16 @@ class FlowTests(unittest.TestCase):
         class FakeIMU:
             saturated = False
             def __init__(self, *args): pass
-            def calibrate_gyro(self, *args): return (0, 0, 1)
+            def calibrate_gyro(self, *args):
+                angle = 10 if scenario == 'bank_right' else -10 if scenario == 'bank_left' else 0
+                return (0, math.sin(math.radians(angle)), math.cos(math.radians(angle)))
             def read(self):
                 if scenario == 'sensor_error' and state['iteration'] >= 4:
                     raise OSError('Sensor abgezogen')
                 if scenario in ('timing', 'timing_rearm') and state['iteration'] == 4:
                     Clock.value += 60000
                     state['stall_return_us'] = Clock.value
-                return (0, 0, 1, 0, 0, 0)
+                return tuple(self.calibrate_gyro())+(0, 0, 0)
 
         class Controller(AxisController):
             def update(self, *args):
@@ -426,6 +442,10 @@ class FlowTests(unittest.TestCase):
                 for c in self.channels.values():
                     c['sequence'] += 1
                     c['pulse'] = 1500 if state['iteration'] < 4 else 1800
+                    if scenario in ('bank_right', 'bank_left'):
+                        c['pulse'] = 1500
+                    if scenario == 'stick_right' and state['iteration'] >= 4:
+                        c['pulse'] = 1000
                     if scenario == 'timing_rearm' and 5 <= state['iteration'] <= 7:
                         c['pulse'] = 1500
                         state['invalid'] = False
@@ -442,13 +462,18 @@ class FlowTests(unittest.TestCase):
 
         class FakeOut:
             def __init__(self, *args):
+                self.settings, self.axes = args
                 state['out_created'] = True
                 if scenario == 'startup_error': raise OSError('PWM start failed')
                 if scenario == 'output_delay': Clock.value += 60000
             def write(self, offsets):
                 recorded.append((state['iteration'], dict(offsets)))
                 state['write_times'].append(Clock.value)
-                return {}
+                # Reine Pulsrechnung einbeziehen, damit Tests auch die zweite
+                # Vorzeichenstufe pruefen. Keine echten PWM-Objekte erzeugen.
+                pulses = {a: command(offsets.get(a, 0), self.settings[a]) for a in self.axes}
+                state['pulse_records'].append(pulses)
+                return pulses
             def close(self):
                 state['closed'] = True
                 if scenario == 'cleanup_error': raise OSError('PWM close failed')
@@ -479,14 +504,16 @@ class FlowTests(unittest.TestCase):
     def test_start_then_trim_keeps_control(self):
         records, state, text = self.simulate('normal')
         self.assertEqual(records[0][0], 2)
-        self.assertGreater(records[-1][1]['roll'], 0)
+        # 1800 us wird je nach RX-Polung zum positiven/negativen Banksollwert.
+        self.assertGreater(records[-1][1]['roll']*config.RECEIVER['roll']['sign'], 0)
         self.assertIn('STABILIZE', text)
         self.assertNotIn('MANUAL_FALLBACK', text)
         self.assertTrue(state['closed'])
 
     def test_imu_failure_falls_back_to_manual(self):
         records, _, text = self.simulate('sensor_error')
-        expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000})*200
+        expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000},
+                             config.RECEIVER['roll']['sign'])*config.SERVOS['roll']['limit']
         self.assertAlmostEqual(records[-1][1]['roll'], expected)
         self.assertIn('MANUAL_FALLBACK', text)
 
@@ -516,7 +543,8 @@ class FlowTests(unittest.TestCase):
     def test_timing_fault_latches_after_neutral_reacquisition(self):
         records, _, text = self.simulate('timing_rearm')
         self.assertEqual(next(offsets for i, offsets in records if i == 5), {})
-        expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000})*200
+        expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000},
+                             config.RECEIVER['roll']['sign'])*config.SERVOS['roll']['limit']
         self.assertAlmostEqual(records[-1][1]['roll'], expected)
         self.assertIn('WAIT_NEUTRAL', text)
         self.assertIn('MANUAL_FALLBACK', text)
@@ -548,7 +576,7 @@ class FlowTests(unittest.TestCase):
 
     def test_tick_wrap_does_not_create_timing_fault(self):
         records, _, text = self.simulate('wrap')
-        self.assertGreater(records[-1][1]['roll'], 0)
+        self.assertGreater(records[-1][1]['roll']*config.RECEIVER['roll']['sign'], 0)
         self.assertNotIn('TIMING', text)
 
     def test_manual_mode_also_neutralizes_after_late_read(self):
@@ -570,8 +598,24 @@ class FlowTests(unittest.TestCase):
     def test_roll_pitch_outputs_together(self):
         records, _, text = self.simulate('normal', axes=('roll', 'pitch'))
         self.assertIn('STABILIZE', text)
-        self.assertGreater(records[-1][1]['roll'], 0)
+        self.assertGreater(records[-1][1]['roll']*config.RECEIVER['roll']['sign'], 0)
         self.assertGreater(records[-1][1]['pitch'], 0)
+
+    def test_right_stick_has_same_physical_direction_in_manual_and_stabilize(self):
+        for mode in ('manual', 'stabilize'):
+            with self.subTest(mode=mode):
+                _, state, _ = self.simulate('stick_right', mode=mode)
+                # In diesem verifizierten Aufbau bedeutet kleinerer Servopuls Rechtsrollen.
+                self.assertLess(state['pulse_records'][-1]['roll'], config.SERVOS['roll']['center'])
+
+    def test_centered_stick_opposes_both_bank_directions(self):
+        for scenario, correction_sign in (('bank_right', 1), ('bank_left', -1)):
+            with self.subTest(scenario=scenario):
+                _, state, text = self.simulate(scenario)
+                deviation = state['pulse_records'][-1]['roll']-config.SERVOS['roll']['center']
+                # Rechtsbank braucht Linksrollwirkung (groesserer Puls), und umgekehrt.
+                self.assertGreater(deviation*correction_sign, 0)
+                self.assertIn('STABILIZE', text)
 
     def test_yaw_uses_rate_command(self):
         records, _, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'))

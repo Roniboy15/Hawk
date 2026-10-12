@@ -5,6 +5,12 @@ Flugfreigabe. Der Segler hat kein Triebwerk/Gas; Servos sind laut Besitzer
 montiert und angeschlossen. Stromversorgung, Signalpegel und Ruderwirkung
 sind damit noch nicht qualifiziert. Kein unabhaengiger Hardware-Bypass vorhanden.
 
+Stand 2026-10-12: Der Besitzer bestaetigt MANUAL und Rollstabilisierung mit
+beiden Rollzeichen=-1 und rate_p=2. Das aktuelle gespeicherte Profil startet
+MANUAL bei AUTO_START=False. Neue/geaenderte Hardware weiterhin zuerst SENSOR.
+Der offene Steckdosen-/Versorgungsbefund in [VALIDIERUNG.md](VALIDIERUNG.md)
+ist vor weiteren bestromten Tests zu klaeren.
+
 ## Vorbereitung
 
 - Bisherigen MCU-Code und calibration.json sichern. Alle zusammengehoerigen

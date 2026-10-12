@@ -1,6 +1,6 @@
 # Validierung — v0.2.1-bench
 
-Hostlauf am 2026-10-11: 51 automatische Tests bestanden, CPython 3.9.6.
+Hostlauf am 2026-10-12: 54 automatische Tests bestanden, CPython 3.9.6.
 Alle 13 Firmwaredateien werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
@@ -35,6 +35,41 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   Fehlkonfiguration verhindert jede Hardware-Konstruktion im App-Start.
 - Ctrl+C bei partiellem PWM-/PIO-Start und Cleanupfehler: weitere Abschaltversuche,
   Receiver-Abschaltung nach PWM-Fehler, kein falscher Erfolg/Flash-Logexport.
+- Roll-Vorzeichenpaar: MANUAL-Pulse bleiben erhalten, kleinerer RX-Puls fordert
+  positive Bank. Echte App-Logik plus reine Servo-Pulsrechnung prueft gleiche
+  Knueppelrichtung in MANUAL/STABILIZE und Gegenkorrektur bei +/-10 Grad Bank.
+
+## Besitzerbericht: Roll-Tischtest am 2026-10-12
+
+Der Besitzer bestaetigt korrekte MANUAL-Ruderwirkung und korrekte Rollstabilisierung
+nach gemeinsamer Umkehr von RECEIVER.roll.sign und SERVOS.roll.sign auf -1.
+Zuvor geprueft: Rechtsknueppel liefert kleinere RX-Pulse; rechte Tragflaeche
+absenken ergibt positiveren angezeigten Rollwinkel.
+
+Arbeitskopie: VERSION=0.2.1-bench, AUTO_START=False, START_MODE='manual', nur Roll
+aktiv, angle_gain=2.0, rate_p=2, rate_i=0, Servo-Limit=200 us, Trim=0.
+Der aktuelle MANUAL-Startmodus ist ein bewusstes Tischtestprofil; SENSOR bleibt
+der erste Schritt fuer neuen/geaenderten Hardwareaufbau. Keine weitere
+Gain-Erhoehung aus diesem Bericht ableiten.
+
+Dies ist ein Besitzerbericht ueber Richtung/Funktion, keine unabhaengige
+Hardwaremessung oder Flugfreigabe. Exakte MCU-Dateien, MicroPython-Version,
+Kalibrierdatei, Worst-Case-Zeiten und Versorgungsmessungen sind noch nicht archiviert.
+Die unten aufgefuehrten elektrischen/Timing-/Fehlerpruefungen bleiben offen.
+
+## Offener Versorgungsbefund am 2026-10-12
+
+Vor den ersten Signalanzeigen wurde eine kurze Unterbrechung aller berichteten
+steckdosenversorgten Geraete bemerkt. Versorgung kehrte laut Besitzer von selbst
+zurueck. Mac am Netzladegeraet, MCU via Mac-USB-C; BEC 5 V laut Besitzer nur an
+Servos, nicht am MCU-5-V-Pin. Zeitpunkt innerhalb des Starts, Verhalten des MCU,
+genauer Stromkreis und Ursache sind unbekannt. Kein Kausalnachweis zur Firmware.
+
+Vor weiteren bestromten Tests Stromversorgungsaufbau dokumentieren und
+Netzunterbrechung klaeren; keine absichtliche Wiederholung am Stromnetz.
+Eine Batterie-/BEC-Unterspannung und eine Raum-/Steckdosenunterbrechung sind
+verschiedene Fehlerbilder. Erst nach geklaertem Aufbau die Niedervoltversorgung
+gezielt messen; keine Versorgungsfreigabe aus dem Roll-Erfolg ableiten.
 
 ## Nicht auf Hardware geprueft
 
@@ -42,7 +77,8 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - Registerzugriffe/Filterverhalten des Moduls 0x72 mit dieser neuen Firmware.
 - Servoversorgung bei drei Achsen, BEC-Einbrueche, Brownouts/Busblockaden.
 - Worst-Case-Laufzeiten inklusive Ausgabe, Garbage Collection, Interrupts.
-- Reale Ruderwirkungen und mechanische Grenzen.
+- Weitere Ruderwirkungen, mechanische Grenzen und reproduzierbare quantitative
+  Messungen; grundlegende Roll-Richtung wurde nur vom Besitzer bestaetigt.
 - Flugzeugdynamik, Kurvenflug, Stall, Hoehen-/Energieverhalten.
 - Funkverlust, Reichweite, Antenne und Verhalten bei gehaltenen RX-Pulsen.
 - PIO-Neustart/FIFO-Leerung auf dem Board, insbesondere bei anliegender High-Phase.

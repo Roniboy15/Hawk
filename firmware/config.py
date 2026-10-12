@@ -11,7 +11,8 @@ Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 
 VERSION = '0.2.1-bench'
 AUTO_START = False
-START_MODE = 'sensor'             # sensor / manual / stabilize
+# Aktuelles Roll-Tischtestprofil des Besitzers; bei neuer Hardware SENSOR waehlen.
+START_MODE = 'manual'             # sensor / manual / stabilize
 ACTIVE_AXES = ('roll',)            # danach ('roll', 'pitch'), spaeter 'yaw'
 ALLOW_ID72_BENCH = True            # fuer diesen getesteten Sensor, kein Typnachweis
 LOOP_US = 10000
@@ -28,21 +29,24 @@ PITCH_CONTROL_LIMIT_DEG = 75.0    # Euler-Reglerbereich, keine Sensorgrenze
 
 # RX-Signale nur 3,3-V-kompatibel an GPIO! Dieser Segler hat kein Gas/Triebwerk.
 # GP-Nummern, NICHT physische Pinpositionen. GP3 bleibt Y-Querruder-Ausgang.
-RECEIVER = {'roll': {'pin': 2, 'sign': 1},
+# Rechtsknueppel liefert kleinere Pulse, Rechtsbank ist positiver Rollwinkel.
+# Beide Rollzeichen gemeinsam -1: MANUAL bleibt gleich, Feedback wird korrekt.
+RECEIVER = {'roll': {'pin': 2, 'sign': -1},
             'pitch': {'pin': 8, 'sign': 1},
             'yaw': {'pin': 9, 'sign': 1}}
 RX_TIMEOUT_MS = 100
 NEUTRAL_WINDOW = 0.08
 NEUTRAL_FRAMES = 25
 
-SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 200},
+SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 200},
           'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150},
           'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150}}
 
 # Zweistufig: Winkelfehler -> Sollrate -> Servo. I-Anteil vorerst 0.
 # Diese Werte sind konservative Bodenversuchsparameter, keine Flugabstimmung.
+# Roll rate_p=2: nach Vorzeichenkorrektur am Tisch verwendet, keine Flugabstimmung.
 CONTROLLERS = {
-    'roll': {'angle_gain': 2.0, 'rate_p': 1.5, 'rate_i': 0.0,
+    'roll': {'angle_gain': 2.0, 'rate_p': 2, 'rate_i': 0.0,
              'integral_limit': 30.0, 'max_rate': 60.0, 'max_angle': 20.0},
     'pitch': {'angle_gain': 2.0, 'rate_p': 1.0, 'rate_i': 0.0,
               'integral_limit': 20.0, 'max_rate': 40.0, 'max_angle': 10.0},
