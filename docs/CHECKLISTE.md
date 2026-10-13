@@ -78,7 +78,10 @@
 - [ ] Sender einschalten und richtige Einstellungen prüfen.
 - [ ] BEC/Batterie anschließen; MCU-Versorgung wie geplant herstellen.
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.
-- [ ] Fuer v0.2.1 nur Roll nach [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md) pruefen.
+- [ ] Roll-Funktionstest abgeschlossen; fuer Nick/Gier
+  [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
+  [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md) verwenden.
+- [ ] Neue Achse erst SENSOR/MANUAL pruefen, dann DIRECTION_CHECKED_AXES erweitern.
 - [ ] `start_test.py` ausführen.
 - [ ] Während der Gyro-Kalibrierung nichts bewegen.
 - [ ] Knüppel für die Freigabe mittig halten.

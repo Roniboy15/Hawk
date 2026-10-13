@@ -74,7 +74,8 @@ die Freigabe erneut verlangt. CH1 ist nicht mehr direkt am Servo angeschlossen.
 
 Receiver.sign bestimmt Links/Rechts-Kommando, Servos.sign die Ruderwirkung.
 In beiden Modi muss ein positiver Roll-Steuerwert physisch Rechtsrollen
-erzeugen. Bei Hoehenruder muss positiver Nick-Steuerwert die Nase heben.
+erzeugen. In X-vor/Y-links/Z-oben muss positiver Nick-Steuerwert
+Nase-runter-Wirkung erzeugen; Nase-hoch ist negativ. Gier positiv bedeutet links.
 
 ## 6. Roll stabilisiert testen
 
@@ -92,37 +93,27 @@ Ueber 70 Grad Roll allein verriegelt der Code nicht mehr. Nick >75 Grad,
 Gyro-/Accel-Saettigung oder Laufzeitfehler ergeben MANUAL_FALLBACK.
 Wiederherstellung der Automatik nur durch Neustart am Boden.
 
-## 7. Nick erst danach hinzufuegen
+## 7. Nick nach abgeschlossenem Roll-Funktionstest
 
-**Der folgende Ausbau ist zurueckgestellt, bis die Nick-Vorzeichenkonvention
-aufgeloest und getestet ist. Aktuell nur Roll aktivieren.** Die positive
-Nickvorgabe im bisherigen manuellen Ablauf passt nicht zur beschriebenen
-X-vor/Y-links/Z-oben-Quaternionkonvention; Servozeichen nicht blind uebernehmen.
+Ab v0.2.2 gilt [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md). Der Besitzer
+bestaetigt den grundlegenden Rolltest; Hoehenruder ist noch direkt am Receiver.
+Signalpfad bei getrennter Versorgung auf CH2->GP8 und GP6->Servo umstellen,
+nie Receiver und MCU gleichzeitig an den Servosignal-Draht anschliessen.
+Versorgungsbefund und BEC 5 V @ 3 A beachten: [Warnhinweise](VERSORGUNG_WARNHINWEISE.md).
 
-Strom trennen. CH2-Signal -> GP8, Hoehenrudersignal -> GP6, Servo Plus BEC5V,
-Minus gemeinsame Masse. Eingang vorher auf GPIO-vertraeglichen Pegel bringen.
-Kein Servo-Datendraht bleibt direkt am entsprechenden Receiverausgang.
+SENSOR mit Roll+Nick ist vorbereitet. Nase-hoch ergibt negativen pitch_down;
+das ist die beibehaltene rechtshaendige Koerperkonvention. calibrate_rc.run(('pitch',))
+kann nur den neuen Kanal erfassen. Erst MANUAL-Richtungen pruefen, dann
+DIRECTION_CHECKED_AXES erweitern und STABILIZE testen. Rollzeichen/Gains beibehalten.
 
-```python
-ACTIVE_AXES = ('roll', 'pitch')
-START_MODE = 'sensor'
-```
+## 8. Gier nach bestandenem Nick-Test
 
-Sensor pruefen. calibrate_rc.py erneut fuer beide Kanaele ausfuehren (CH2
-hinzugekommen). Dann manual und beide Knueppel/Ruder pruefen. Erst danach
-stabilize: Nase oben -> Nase-ab-Ruderkommando; Nase unten -> Nase-auf.
-Roll/Ruder bleiben korrekt. Danach kombinierte Bewegungen vorsichtig pruefen.
-Fehlender CH2-Eingang verhindert jetzt die Freigabe beider Achsen.
-
-## 8. Optional Gier
-
-CH4 -> GP9, Seitenrudersignal -> GP7, Versorgung wie oben.
-ACTIVE_AXES=('roll','pitch','yaw'), RC-Kalibrierung wiederholen.
-Erst manual, dann stabilize. Seitliche Drehung -> entgegengesetzte
-Gier-Drehratenkorrektur; fest gehaltene neue Richtung -> Korrektur klingt ab.
-Es ist kein Kompass-/Kurs-Halten. Ein absichtlich ausgefuehrter Kurvenflug
-braucht spaeter Turn-Koordination; die simple Gier-Daempfung ist dafuer noch
-keine geeignete Flugabstimmung und kann gegen gewuenschte Drehung arbeiten.
+Gleiche Anleitung, naechste Stufe: Signalpfad bei getrennter Versorgung auf
+CH4->GP9 und GP7->Servo umstellen. SENSOR, nur neue Gier-RC-Kalibrierung,
+MANUAL-Vorzeichen, Richtungsbestaetigung, dann STABILIZE. Positive Koerper-Gier
+bedeutet links; Rechtskommando ist negativ. Nach dem Stop einer Drehung geht
+Gier zur Trimlage, ohne zur alten Richtung zurueckzuregeln. Kein absolutes
+Kurs-Halten, keine koordinierte Flugkurve oder Flugabstimmung.
 
 ## 9. Rudertrim versus Fluglagen-Trim
 

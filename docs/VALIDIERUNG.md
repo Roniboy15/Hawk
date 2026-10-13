@@ -1,6 +1,6 @@
-# Validierung — v0.2.1-bench
+# Validierung — v0.2.2-bench
 
-Hostlauf am 2026-10-12: 54 automatische Tests bestanden, CPython 3.9.6.
+Hostlauf am 2026-10-12: 66 automatische Tests bestanden, CPython 3.9.6.
 Alle 13 Firmwaredateien werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
@@ -38,6 +38,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - Roll-Vorzeichenpaar: MANUAL-Pulse bleiben erhalten, kleinerer RX-Puls fordert
   positive Bank. Echte App-Logik plus reine Servo-Pulsrechnung prueft gleiche
   Knueppelrichtung in MANUAL/STABILIZE und Gegenkorrektur bei +/-10 Grad Bank.
+- Negative Koerper-Nickanzeige bei Nase hoch und Pitch-Gegenkorrektur in beiden
+  Richtungen. Gier-Gegenkorrektur bei Links-/Rechtsrate und Rueckkehr zur Trimlage
+  nach Stop an neuer Richtung, ohne absolutes Kurs-Halten.
+- Unbestaetigte neue Achse blockiert STABILIZE vor Hardwarestart; MANUAL bleibt
+  fuer die Richtungspruefung erreichbar. Fehlender CH2 blockiert beide Achsen,
+  CH2-Verlust neutralisiert beide.
+- Selektive Nick-RC-Kalibrierung bewahrt Roll/Level; nicht aktive Achsen werden
+  vor PIO-Start abgelehnt. Startphasenreihenfolge und erweiterte CSV-Spalten stimmen.
+- Langsame PWM-Start-Diagnose ueberschreitet Deadline und erzeugt keine PWM.
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 
@@ -46,7 +55,7 @@ nach gemeinsamer Umkehr von RECEIVER.roll.sign und SERVOS.roll.sign auf -1.
 Zuvor geprueft: Rechtsknueppel liefert kleinere RX-Pulse; rechte Tragflaeche
 absenken ergibt positiveren angezeigten Rollwinkel.
 
-Arbeitskopie: VERSION=0.2.1-bench, AUTO_START=False, START_MODE='manual', nur Roll
+Getesteter Rollstand (Commit 4b92223): VERSION=0.2.1-bench, AUTO_START=False, START_MODE='manual', nur Roll
 aktiv, angle_gain=2.0, rate_p=2, rate_i=0, Servo-Limit=200 us, Trim=0.
 Der aktuelle MANUAL-Startmodus ist ein bewusstes Tischtestprofil; SENSOR bleibt
 der erste Schritt fuer neuen/geaenderten Hardwareaufbau. Keine weitere
@@ -57,6 +66,12 @@ Hardwaremessung oder Flugfreigabe. Exakte MCU-Dateien, MicroPython-Version,
 Kalibrierdatei, Worst-Case-Zeiten und Versorgungsmessungen sind noch nicht archiviert.
 Die unten aufgefuehrten elektrischen/Timing-/Fehlerpruefungen bleiben offen.
 
+Der Besitzer schliesst diesen grundlegenden Roll-Funktionstest ab. Naechster
+Schritt ist SENSOR fuer Nick, dann MANUAL-Zeichenpruefung und STABILIZE, danach
+Gier. v0.2.2 ist dafuer vorbereitet: SENSOR, Roll+Nick, DIRECTION_CHECKED_AXES
+enthaelt bislang nur Roll. Ein direkt am Receiver betriebenes Hoehen-/Seitenruder
+belegt noch keine Pruefung seiner MCU-Regelung.
+
 ## Offener Versorgungsbefund am 2026-10-12
 
 Vor den ersten Signalanzeigen wurde eine kurze Unterbrechung aller berichteten
@@ -65,11 +80,12 @@ zurueck. Mac am Netzladegeraet, MCU via Mac-USB-C; BEC 5 V laut Besitzer nur an
 Servos, nicht am MCU-5-V-Pin. Zeitpunkt innerhalb des Starts, Verhalten des MCU,
 genauer Stromkreis und Ursache sind unbekannt. Kein Kausalnachweis zur Firmware.
 
-Vor weiteren bestromten Tests Stromversorgungsaufbau dokumentieren und
-Netzunterbrechung klaeren; keine absichtliche Wiederholung am Stromnetz.
-Eine Batterie-/BEC-Unterspannung und eine Raum-/Steckdosenunterbrechung sind
-verschiedene Fehlerbilder. Erst nach geklaertem Aufbau die Niedervoltversorgung
-gezielt messen; keine Versorgungsfreigabe aus dem Roll-Erfolg ableiten.
+Weitere Besitzerangaben: BEC-Aufschrift 5 V @ 3 A, zusaetzlich 20 A; vier Servos.
+Hoehen-/Seitenrudersignale noch direkt am Receiver. Ursache bleibt unbekannt.
+Bestmoegliche Diagnose und begrenzter Niedervolt-Testaufbau ohne angeschlossenes
+Mac-Netzladegeraet: [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md).
+Softwarevorbereitung geht weiter; daraus folgt keine elektrische Freigabe und
+keine Erlaubnis, einen Netzfehler absichtlich zu reproduzieren.
 
 ## Nicht auf Hardware geprueft
 
@@ -84,10 +100,12 @@ gezielt messen; keine Versorgungsfreigabe aus dem Roll-Erfolg ableiten.
 - PIO-Neustart/FIFO-Leerung auf dem Board, insbesondere bei anliegender High-Phase.
 - Garantierte Reaktionszeit bei permanentem Bus-/CPU-Haenger oder fehlerhafter
   PWM-Abschaltung; unabhaengiger Hardware-Bypass fehlt.
-- Nick-Vorzeichenkonvention und Anti-Windup bei Servo-Trim plus nonzero rate_i
-  sind noch offen. Fuer den Roll-Tischtest rate_i=0 belassen.
+- Physische Sender-/Servozeichen von Nick/Gier sind noch offen. Die Koerperkonvention
+  ist dokumentiert/hostgetestet; Checkbox ersetzt keinen Hardwaretest.
+- Anti-Windup bei Servo-Trim plus nonzero rate_i bleibt offen. Fuer Tischtests rate_i=0.
 
 Ein bestandener Hosttest ist kein Flugtest. Der konkrete Upload beginnt
 deshalb mit SENSOR, nur Roll aktiv, dann MANUAL, dann STABILIZE.
-Siehe [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md). Nick-Vorzeichen zuerst aufloesen,
-weitere Achsen anschliessend schrittweise aktivieren. Keine Aussagen zur Flugtauglichkeit.
+Grundlegender Rolltest: [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md). Naechste Achsen:
+[PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md), je Achse erst physische Zeichen
+pruefen, dann Stabilisierung. Keine Aussagen zur Flugtauglichkeit.

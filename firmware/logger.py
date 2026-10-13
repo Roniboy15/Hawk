@@ -3,12 +3,13 @@
 Hauptklasse RingLog: append() ueberschreibt aelteste Zeile, save() exportiert.
 Logik: letzte LOG_CAPACITY Datensaetze im RAM. Export nur nach gestoppter PWM.
 Stromverlust verliert den RAM-Inhalt. Dies ist KEIN dauerhafter Fluglogger.
-Felder: Zeit, Modus, Roll/Nick/Gier, Sollwerte, Servopulse, Schleifenzeit, Fehler.
+Felder: Zeit, Modus, Koerperwinkel, Sollwerte, Servopulse, dt, Gyro, Gier-Sollrate, Fehler.
+Winkel wie bisher: +Nick=Nase runter, +Gier=Nase links. v0.2.2 erweitert CSV.
 """
 
 
 class RingLog:
-    HEADER = 'ms,mode,roll,pitch,yaw,target_roll,target_pitch,servo_roll,servo_pitch,servo_yaw,dt_ms,fault\n'
+    HEADER = 'ms,mode,roll,pitch,yaw,target_roll,target_pitch,servo_roll,servo_pitch,servo_yaw,dt_ms,gyro_roll,gyro_pitch,gyro_yaw,target_yaw_rate,fault\n'
 
     def __init__(self, capacity=200):
         if capacity < 1:

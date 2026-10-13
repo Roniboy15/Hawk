@@ -41,6 +41,17 @@ def validate_config():
             any(axis not in ('roll', 'pitch', 'yaw') for axis in cfg.ACTIVE_AXES) or
             len(set(cfg.ACTIVE_AXES)) != len(cfg.ACTIVE_AXES)):
         raise ValueError('ACTIVE_AXES leer/doppelt')
+    checked = cfg.DIRECTION_CHECKED_AXES
+    if (not isinstance(checked, (tuple, list)) or
+            any(axis not in ('roll', 'pitch', 'yaw') for axis in checked) or
+            len(set(checked)) != len(checked)):
+        raise ValueError('DIRECTION_CHECKED_AXES ungueltig')
+    # SENSOR/MANUAL bleiben fuer die Pruefung erreichbar. STABILIZE darf aber
+    # keine neue Achse mit ungeprueftem Sensor-/Sender-/Servozeichen regeln.
+    if cfg.START_MODE == 'stabilize':
+        for axis in cfg.ACTIVE_AXES:
+            if axis not in checked:
+                raise ValueError(axis+': zuerst SENSOR/MANUAL pruefen, dann DIRECTION_CHECKED_AXES')
     for name in ('AUTO_START', 'ALLOW_ID72_BENCH', 'SAVE_LOG_ON_STOP'):
         if type(getattr(cfg, name)) is not bool:
             raise ValueError(name+' muss bool sein')
@@ -137,7 +148,9 @@ def run():
     try:
         try:
             imu = IMU(cfg.SENSOR, cfg.ALLOW_ID72_BENCH)
+            print('Phase GYRO_CAL t=%d ms: noch kein PWM-Start' % time.ticks_ms())
             acc = imu.calibrate_gyro(cfg.GYRO_STD_MAX)
+            print('Phase GYRO_DONE t=%d ms' % time.ticks_ms())
             pose.seed(acc)
             angles = pose.angles()
         except Exception as error:
@@ -154,6 +167,8 @@ def run():
         construction_complete = True
         print('Version:', cfg.VERSION, '| Modus:', cfg.START_MODE,
               '| Achsen:', cfg.ACTIVE_AXES)
+        print('Koerperkonvention: +roll=rechts, +pitch=Nase runter, +yaw=Nase links')
+        print('Richtungen bestaetigt:', cfg.DIRECTION_CHECKED_AXES)
         print('Neutral wird nur vor Aktivierung/nach RX-Ausfall verlangt.')
         print('Ohne Lagekalibrierung: Winkel relativ zum Sensorkoordinatensystem.')
         previous = time.ticks_us()
@@ -217,6 +232,8 @@ def run():
                            cfg.FLIGHT_ATTITUDE_TRIM['roll'])
             target_pitch = (sticks.get('pitch', 0)*cfg.CONTROLLERS['pitch']['max_angle']+
                             cfg.FLIGHT_ATTITUDE_TRIM['pitch'])
+            target_yaw_rate = (sticks.get('yaw', 0)*cfg.CONTROLLERS['yaw']['max_rate']
+                               if 'yaw' in cfg.ACTIVE_AXES else 0.0)
             offsets = {}
             if mode in ('MANUAL', 'MANUAL_FALLBACK'):
                 offsets = {a: sticks[a]*cfg.SERVOS[a]['limit'] for a in cfg.ACTIVE_AXES}
@@ -236,15 +253,19 @@ def run():
                                             -settings['max_rate'], settings['max_rate'])
                         offsets[axis] = controllers[axis].update(target_rate, 0, sample[3+index], dt, True)
                     else:
-                        target_rate = sticks[axis]*cfg.CONTROLLERS[axis]['max_rate']
-                        offsets[axis] = controllers[axis].update(target_rate, 0, sample[5], dt, True)
+                        offsets[axis] = controllers[axis].update(target_yaw_rate, 0, sample[5], dt, True)
             # Vor Neutralfreigabe keinerlei Servopulse. Danach neutral bei RX-Ausfall.
             if (outputs is None and mode in ('MANUAL', 'MANUAL_FALLBACK', 'STABILIZE')
                     and not deadline_missed(start)):
-                # Schon vor dem allerersten PWM-Start muss die Deadline gelten.
-                construction_complete = False
-                outputs = Outputs(cfg.SERVOS, cfg.ACTIVE_AXES)
-                construction_complete = True
+                # Zeitmarke erlaubt spaeter Korrelation mit einer Stoerung.
+                # "REQUEST" beweist noch keinen Start und Diagnose kann blockieren.
+                print('Phase PWM_START_REQUEST t=%d ms axes=%s' %
+                      (time.ticks_ms(), str(cfg.ACTIVE_AXES)))
+                # Nach Konsolenausgabe erneut pruefen: keine PWM nach erkannter Deadline.
+                if not deadline_missed(start):
+                    construction_complete = False
+                    outputs = Outputs(cfg.SERVOS, cfg.ACTIVE_AXES)
+                    construction_complete = True
             # Zweite Schranke direkt vor der Ausgabe: auch Reglerrechnung oder
             # PWM-Initialisierung koennen Zeit verbrauchen. Frische Freigabe
             # verwerfen, wenn eine Zeitueberschreitung erkannt wurde.
@@ -266,14 +287,16 @@ def run():
                 last_mode = mode
             if time.ticks_diff(now, print_time) >= int(1000/cfg.CONSOLE_HZ):
                 rx = {a: receiver.channels[a]['pulse'] for a in cfg.ACTIVE_AXES}
-                print('roll=%.1f pitch=%.1f soll=(%.1f,%.1f) rx=%s servo=%s %s %s' %
-                      (roll, pitch, target_roll, target_pitch, rx, pulses, mode, fault))
+                print('roll=%.1f pitch_down=%.1f soll=(%.1f,%.1f) gyro=(%.1f,%.1f,%.1f) yaw_rate_left=%.1f rx=%s servo=%s %s %s' %
+                      (roll, pitch, target_roll, target_pitch, sample[3], sample[4], sample[5],
+                       target_yaw_rate, rx, pulses, mode, fault))
                 print_time = now
             if time.ticks_diff(now, log_time) >= int(1000/cfg.LOG_HZ):
-                row = '%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.2f,%s\n' % (
+                row = '%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%s\n' % (
                     time.ticks_diff(now, started), mode, roll, pitch, angles[2],
                     target_roll, target_pitch, pulses.get('roll', 0), pulses.get('pitch', 0),
-                    pulses.get('yaw', 0), dt*1000, fault)
+                    pulses.get('yaw', 0), dt*1000, sample[3], sample[4], sample[5],
+                    target_yaw_rate, fault)
                 log.append(row)
                 log_time = now
             remaining = cfg.LOOP_US-time.ticks_diff(time.ticks_us(), start)

@@ -30,12 +30,18 @@ def collect(receiver, axis, duration_ms):
     return pulses
 
 
-def run():
+def run(axes=None):
+    # Optional nur den neuen Kanal erfassen: die bestaetigte Rollkalibrierung
+    # und die geometrische Levelreferenz bleiben unveraendert erhalten.
+    axes = cfg.ACTIVE_AXES if axes is None else axes
+    if (not isinstance(axes, (tuple, list)) or not axes or
+            any(axis not in cfg.ACTIVE_AXES for axis in axes) or len(set(axes)) != len(axes)):
+        raise ValueError('Kalibrierachsen leer/doppelt/nicht aktiv')
     data = load(cfg.CALIBRATION_FILE)
-    receiver = Receiver(cfg.RECEIVER, cfg.ACTIVE_AXES, cfg.RX_TIMEOUT_MS,
+    receiver = Receiver(cfg.RECEIVER, axes, cfg.RX_TIMEOUT_MS,
                         max_poll_ms=(cfg.MAX_LOOP_US+999)//1000)
     try:
-        for axis in cfg.ACTIVE_AXES:
+        for axis in axes:
             input(axis+': Knueppel mittig loslassen, dann Enter: ')
             center_values = collect(receiver, axis, 2000)
             if max(center_values)-min(center_values) > 20:

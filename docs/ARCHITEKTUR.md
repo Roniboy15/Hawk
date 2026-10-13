@@ -10,6 +10,12 @@ Sensor -> korrigierte Beschleunigung/Drehraten -> Quaternion-Lage ->
 Solllage aus Sender -> Quaternionfehler im Koerperrahmen -> Sollrate ->
 begrenzter PI-Drehratenregler -> Servotrim und Ausgangsgrenzen.
 
+Koerperkonvention X-vor/Y-links/Z-oben: +Roll rechts, +Nick Nase runter,
++Gier Nase links. Das fruehere positive-Nick=Nase-hoch wurde in der Anleitung
+korrigiert; Quaternion-/Gyrorechnung und Level-Schema 1 bleiben unveraendert.
+SENSOR/MANUAL dienen der physischen Vorzeichenpruefung. STABILIZE verlangt
+alle aktiven Achsen in DIRECTION_CHECKED_AXES, bevor Hardware startet.
+
 Der Filter ist Mahony-artig ohne Bias-Integrator und kein EKF. Die
 Beschleunigung wird nur nahe 1g und mit begrenzter Innovation zur Korrektur
 verwendet. Das verhindert nicht jeden Fehler durch Kurvenflug/Vibrationen.
@@ -70,6 +76,12 @@ MicroPython-API-Bezug: [StateMachine](https://docs.micropython.org/en/latest/lib
 [Tick-Arithmetik](https://docs.micropython.org/en/latest/library/time.html),
 [PWM](https://docs.micropython.org/en/latest/library/machine.PWM.html).
 Die konkrete installierte MicroPython-Version ist noch zu dokumentieren.
+
+v0.2.2 ergaenzt Startphasen-Tickzeiten und Gyroachsen/Gier-Sollrate in den CSV-Logs.
+CSV-Auswerter muessen den Header lesen; Winkelzeichen und Kalibrierdatei bleiben
+kompatibel. Optional ausgewaehlte RC-Kalibrierachsen bewahren vorhandene Kanaele
+und Levelreferenz. Rollfunktion vom Besitzer bestaetigt, Versorgungsqualifikation
+separat offen; siehe [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md).
 
 ## Kalibrierung, Referenz, Trimmung
 

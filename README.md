@@ -1,4 +1,4 @@
-# Segelflug-Controller — Version 0.2.1, Bodenversuch
+# Segelflug-Controller — Version 0.2.2, Bodenversuch
 
 Modulare MicroPython-Firmware fuer RP2040-Zero und das bereits getestete
 MPU-kompatible SY-104-Modul (WHO_AM_I 0x72). Konventionelles Flugzeug mit
@@ -12,10 +12,9 @@ kein Triebwerk und kein Gas. Laut Besitzer sind alle Servos montiert und an
 den vorgesehenen Kanaelen angeschlossen; Signalpegel und Ruderwirkungen
 muessen trotzdem gemessen/geprueft werden. Eine gemeinsame Stromleiste ist geplant.
 Die bisher
-funktionierende Firmware auf dem Mac sichern. Die neue Regelung ist eine
-Weiterentwicklung, kein unveraenderter Ersatz: ihre Parameter haben andere
-Bedeutungen und wurden bisher nur am Host simuliert. PIO, I2C, Timing und
-Ruderwirkungen muessen auf deinem Board neu geprueft werden.
+funktionierende Firmware auf dem Mac sichern. Der grundlegende Rolltest wurde
+vom Besitzer bestaetigt; weitere Achsen, elektrische Grenzen und Worst-Case-Timing
+sind noch zu pruefen. Keine Flugabstimmung aus diesem Tischtest ableiten.
 
 ## Start hier
 
@@ -24,14 +23,24 @@ Ruderwirkungen muessen auf deinem Board neu geprueft werden.
 2. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
 3. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
 4. [VALIDIERUNG.md](docs/VALIDIERUNG.md): getestete und noch offene Eigenschaften.
-5. [ROLL_TISCHTEST.md](docs/ROLL_TISCHTEST.md): naechster Schritt fuer v0.2.1,
-   nur Roll, mit Ergebniskriterien und Abbruchbedingungen.
+5. [ROLL_TISCHTEST.md](docs/ROLL_TISCHTEST.md): grundlegender Rolltest vom Besitzer bestanden.
+6. [PITCH_YAW_TISCHTEST.md](docs/PITCH_YAW_TISCHTEST.md): naechste Schritte,
+   Signalpfad vom Receiver zum MCU umstellen, dann je Achse SENSOR/MANUAL/STABILIZE.
+7. [VERSORGUNG_WARNHINWEISE.md](docs/VERSORGUNG_WARNHINWEISE.md): beste Diagnose
+   zum Versorgungsereignis und Warnhinweise fuer BEC 5 V @ 3 A / vier Servos.
 
 v0.2.1 verwirft RC-Puffer bei zu langer Pollpause/vollem FIFO, bewertet Pulsalter
 konservativ und verhindert stabilisierte Kommandos nach einer erkannten
 Deadline-Ueberschreitung. Timingfehler verlangen neue Neutralfreigabe vor dem
 manuellen Ersatz. Parameterpruefung und Abschaltversuche sind erweitert.
 Das ist Hostvalidierung, keine bestaetigte Hardwarequalifikation.
+
+v0.2.2 startet SENSOR mit Roll+Nick; es erzeugt keine MCU-Servopulse.
+DIRECTION_CHECKED_AXES blockiert STABILIZE fuer ungepruefte neue Achsen.
+Die Koerperkonvention bleibt +Roll rechts, +Nick Nase runter, +Gier Nase links;
+pitch_down zeigt daher negative Werte beim Nase-anheben. Kalibrierschema 1
+bleibt erhalten; calibrate_rc.run(('pitch',)) erfasst optional nur den neuen Kanal.
+Startphasen/Tickzeiten und Gyro-/Gier-Sollrate helfen bei Diagnose; CSV ist erweitert.
 
 ## Dateien
 
@@ -64,10 +73,10 @@ GP bedeutet GPIO-Nummer, niemals physische Pinposition.
 | MPU VCC / GND | MCU 3V3 / gemeinsame Masse | Aktiv |
 | CH1 Querruder-Signal | GP2 | Aktiv, Pegel muss 3,3-V-kompatibel sein |
 | Querruder Y-Kabel-Signal | GP3 | Ein gemeinsamer Ausgang |
-| CH2 Hoehenruder-Signal | GP8 | Erst nach Anschluss pitch aktivieren |
-| Hoehenruder-Servo-Signal | GP6 | Erst nach Anschluss pitch aktivieren |
-| CH4 Seitenruder-Signal | GP9 | Optional |
-| Seitenruder-Servo-Signal | GP7 | Optional |
+| CH2 Hoehenruder-Signal | GP8 | SENSOR-Profil vorbereitet; Signalpfad noch umstellen |
+| Hoehenruder-Servo-Signal | GP6 | Laut Besitzer bisher direkt am Receiver |
+| CH4 Seitenruder-Signal | GP9 | Nach Nick-Test hinzufuegen |
+| Seitenruder-Servo-Signal | GP7 | Laut Besitzer bisher direkt am Receiver |
 | Gas/Triebwerk | Nicht vorhanden | Keine Throttle-Funktion |
 | Receiver/Servo Plus | BEC 5 V | Ausreichende Strombelastbarkeit pruefen |
 | Alle GND | Gemeinsame Minusleiste | Auch MCU-GND anschliessen |
@@ -96,7 +105,8 @@ Software-Differenzierung. Die vorhandene funktionierende Mechanik beibehalten.
   koennen seine Gravitationskorrektur beeinflussen.
 - MANUAL_FALLBACK bedeutet Software-Ersatz bei laufendem MCU und gueltigem RX,
   keinen sicheren Weiterflug bei CPU-Haenger, Stromausfall oder blockiertem I2C.
-- Nick-Vorzeichenkonvention ist noch offen: vor Nick-Stabilisierung aufloesen.
+- Nick-/Gier-Konvention ist explizit, physische Servo-/Senderzeichen sind noch
+  zu pruefen. DIRECTION_CHECKED_AXES erst nach SENSOR/MANUAL-Checks erweitern.
 
 ## Tests auf dem Mac
 

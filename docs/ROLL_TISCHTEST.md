@@ -8,8 +8,10 @@ sind damit noch nicht qualifiziert. Kein unabhaengiger Hardware-Bypass vorhanden
 Stand 2026-10-12: Der Besitzer bestaetigt MANUAL und Rollstabilisierung mit
 beiden Rollzeichen=-1 und rate_p=2. Das aktuelle gespeicherte Profil startet
 MANUAL bei AUTO_START=False. Neue/geaenderte Hardware weiterhin zuerst SENSOR.
-Der offene Steckdosen-/Versorgungsbefund in [VALIDIERUNG.md](VALIDIERUNG.md)
-ist vor weiteren bestromten Tests zu klaeren.
+Der grundlegende Roll-Funktionstest ist damit vom Besitzer abgeschlossen;
+Versorgungs-/Timingqualifikation bleibt separat offen. Weiter mit
+[PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
+[VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md). Keine Flugfreigabe.
 
 ## Vorbereitung
 

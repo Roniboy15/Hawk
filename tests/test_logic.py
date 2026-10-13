@@ -28,6 +28,7 @@ import app
 import calibration
 import receiver
 import outputs
+import calibrate_rc
 from attitude import Attitude, quaternion, body_error
 from receiver import normalize
 from outputs import command
@@ -216,6 +217,49 @@ class ConfigurationTests(unittest.TestCase):
         rx.assert_not_called()
         pwm.assert_not_called()
 
+    def test_unchecked_axis_cannot_start_stabilization(self):
+        with patch.object(config, 'START_MODE', 'stabilize'), \
+             patch.object(config, 'ACTIVE_AXES', ('roll', 'pitch')), \
+             patch.object(config, 'DIRECTION_CHECKED_AXES', ('roll',)), \
+             patch.object(app, 'IMU') as imu, patch.object(app, 'Outputs') as pwm:
+            with self.assertRaisesRegex(ValueError, 'pitch'):
+                app.run()
+        imu.assert_not_called()
+        pwm.assert_not_called()
+
+    def test_manual_allows_direction_check_of_new_axis(self):
+        with patch.object(config, 'START_MODE', 'manual'), \
+             patch.object(config, 'ACTIVE_AXES', ('roll', 'pitch')), \
+             patch.object(config, 'DIRECTION_CHECKED_AXES', ('roll',)):
+            app.validate_config()
+
+
+class CalibrationSelectionTests(unittest.TestCase):
+    def test_pitch_only_calibration_preserves_roll_and_level(self):
+        roll = {'min': 1053, 'center': 1554, 'max': 1998}
+        level = {'roll': -3, 'pitch': 7}
+        data = {'schema': 1, 'rc': {'roll': dict(roll)}, 'level': dict(level)}
+        with patch.object(config, 'ACTIVE_AXES', ('roll', 'pitch')), \
+             patch.object(calibrate_rc, 'load', return_value=data), \
+             patch.object(calibrate_rc, 'Receiver') as rx, \
+             patch.object(calibrate_rc, 'collect', side_effect=[[1500]*30, [1000]*30+[2000]*30]), \
+             patch.object(calibrate_rc, 'save') as save, patch('builtins.input', return_value=''), \
+             contextlib.redirect_stdout(io.StringIO()):
+            calibrate_rc.run(('pitch',))
+        self.assertEqual(rx.call_args[0][1], ('pitch',))
+        self.assertEqual(data['rc']['roll'], roll)
+        self.assertEqual(data['level'], level)
+        self.assertEqual(data['rc']['pitch'], {'min': 1000, 'center': 1500, 'max': 2000})
+        save.assert_called_once_with(config.CALIBRATION_FILE, data)
+        rx.return_value.close.assert_called_once()
+
+    def test_inactive_axis_is_rejected_before_receiver_start(self):
+        with patch.object(config, 'ACTIVE_AXES', ('roll', 'pitch')), \
+             patch.object(calibrate_rc, 'Receiver') as rx:
+            with self.assertRaises(ValueError):
+                calibrate_rc.run(('yaw',))
+        rx.assert_not_called()
+
 
 class CleanupTests(unittest.TestCase):
     def test_pwm_failure_still_attempts_zero_deinit_and_low_on_all_outputs(self):
@@ -304,6 +348,12 @@ class PureTests(unittest.TestCase):
         r, p, _ = pose.angles()
         self.assertAlmostEqual(r, 35)
         self.assertAlmostEqual(p, -20)
+
+    def test_nose_up_is_negative_body_pitch(self):
+        pose = Attitude()
+        angle = math.radians(10)
+        pose.seed((math.sin(angle), 0, math.cos(angle)))
+        self.assertAlmostEqual(pose.angles()[1], -10)
 
     def test_roll_crosses_70_without_fault(self):
         pose = Attitude(gain=0)
@@ -397,7 +447,7 @@ class FlowTests(unittest.TestCase):
                  expected_error=None):
         recorded = []
         state = {'iteration': 0, 'closed': False, 'write_times': [], 'saved_logs': [],
-                 'pulse_records': []}
+                 'pulse_records': [], 'log_rows': []}
 
         class Clock:
             value = (1 << 30)-15000 if scenario == 'wrap' else 1000000
@@ -414,6 +464,9 @@ class FlowTests(unittest.TestCase):
             saturated = False
             def __init__(self, *args): pass
             def calibrate_gyro(self, *args):
+                if scenario in ('nose_up', 'nose_down'):
+                    pitch = math.radians(-10 if scenario == 'nose_up' else 10)
+                    return (-math.sin(pitch), 0, math.cos(pitch))
                 angle = 10 if scenario == 'bank_right' else -10 if scenario == 'bank_left' else 0
                 return (0, math.sin(math.radians(angle)), math.cos(math.radians(angle)))
             def read(self):
@@ -422,7 +475,10 @@ class FlowTests(unittest.TestCase):
                 if scenario in ('timing', 'timing_rearm') and state['iteration'] == 4:
                     Clock.value += 60000
                     state['stall_return_us'] = Clock.value
-                return tuple(self.calibrate_gyro())+(0, 0, 0)
+                gz = 10 if scenario == 'yaw_left' else -10 if scenario == 'yaw_right' else 0
+                if scenario == 'yaw_stopped':
+                    gz = 50 if state['iteration'] < 5 else 0
+                return tuple(self.calibrate_gyro())+(0, 0, gz)
 
         class Controller(AxisController):
             def update(self, *args):
@@ -442,18 +498,21 @@ class FlowTests(unittest.TestCase):
                 for c in self.channels.values():
                     c['sequence'] += 1
                     c['pulse'] = 1500 if state['iteration'] < 4 else 1800
-                    if scenario in ('bank_right', 'bank_left'):
+                    if scenario in ('bank_right', 'bank_left', 'nose_up', 'nose_down', 'yaw_left', 'yaw_right', 'yaw_stopped'):
                         c['pulse'] = 1500
                     if scenario == 'stick_right' and state['iteration'] >= 4:
                         c['pulse'] = 1000
                     if scenario == 'timing_rearm' and 5 <= state['iteration'] <= 7:
                         c['pulse'] = 1500
                         state['invalid'] = False
+                if scenario == 'missing_pitch' or (scenario == 'pitch_loss' and state['iteration'] >= 6):
+                    self.channels['pitch']['pulse'] = None
                 if scenario == 'receiver_delay' and state['iteration'] == 2:
                     Clock.value += 60000
             def all_fresh(self, now):
                 return not state.get('invalid', False) and not (
-                    scenario == 'rx_loss' and state['iteration'] >= 6)
+                    scenario == 'rx_loss' and state['iteration'] >= 6) and not (
+                    scenario == 'missing_pitch' or (scenario == 'pitch_loss' and state['iteration'] >= 6))
             def invalidate(self, now):
                 state['invalid'] = True
                 state['invalidated_at'] = state['iteration']
@@ -483,16 +542,25 @@ class FlowTests(unittest.TestCase):
         data = {'schema': 1, 'level': level,
                 'rc': {axis: {'min': 1000, 'center': 1500, 'max': 2000} for axis in axes}}
         transcript = io.StringIO()
+        original_print = print
+        def diagnostic_print(*args, **kwargs):
+            if (scenario == 'startup_console_delay' and args and
+                    str(args[0]).startswith('Phase PWM_START_REQUEST')):
+                Clock.value += 60000
+            original_print(*args, **kwargs)
         with patch.object(app, 'IMU', FakeIMU), patch.object(app, 'Receiver', FakeRX), \
              patch.object(app, 'Outputs', FakeOut), patch.object(app, 'time', Clock), \
              patch.object(app, 'AxisController', Controller), \
+             patch.object(app, 'print', diagnostic_print, create=True), \
              patch.object(app, 'load', lambda path: data), \
              patch.object(config, 'START_MODE', mode), \
              patch.object(config, 'ACTIVE_AXES', axes), \
+             patch.object(config, 'DIRECTION_CHECKED_AXES', axes), \
              patch.object(config, 'NEUTRAL_FRAMES', 2), \
              patch.object(config, 'LOG_HZ', 100), \
              patch.object(config, 'SAVE_LOG_ON_STOP', save_log), \
-             patch.object(RingLog, 'save', lambda log, path: state['saved_logs'].append(path)), \
+             patch.object(RingLog, 'save', lambda log, path: (
+                 state['saved_logs'].append(path), state['log_rows'].extend(log.ordered()))), \
              contextlib.redirect_stdout(transcript):
             if expected_error is None:
                 app.run()
@@ -616,6 +684,56 @@ class FlowTests(unittest.TestCase):
                 # Rechtsbank braucht Linksrollwirkung (groesserer Puls), und umgekehrt.
                 self.assertGreater(deviation*correction_sign, 0)
                 self.assertIn('STABILIZE', text)
+
+    def test_pitch_feedback_opposes_nose_up_and_down(self):
+        # Testfixture: positive Pitchkommandos/Servopulse bedeuten Nase runter.
+        # Physische pitch/yaw-Polung bleibt separat am Flugzeug zu pruefen.
+        for scenario, offset_sign in (('nose_up', 1), ('nose_down', -1)):
+            with self.subTest(scenario=scenario):
+                records, _, _ = self.simulate(scenario, axes=('roll', 'pitch'))
+                self.assertGreater(records[-1][1]['pitch']*offset_sign, 0)
+                self.assertAlmostEqual(records[-1][1]['roll'], 0, places=6)
+
+    def test_yaw_feedback_opposes_left_and_right_turn_rate(self):
+        # +Koerper-Gier ist links. Bei Drehung nach links muss Kommando negativ sein.
+        for scenario, offset_sign in (('yaw_left', -1), ('yaw_right', 1)):
+            with self.subTest(scenario=scenario):
+                records, _, _ = self.simulate(scenario, axes=('roll', 'pitch', 'yaw'))
+                self.assertGreater(records[-1][1]['yaw']*offset_sign, 0)
+
+    def test_yaw_returns_to_trim_after_rotation_stops_at_new_heading(self):
+        _, state, _ = self.simulate('yaw_stopped', axes=('roll', 'pitch', 'yaw'), save_log=True)
+        row = dict(zip(RingLog.HEADER.strip().split(','), state['log_rows'][-1].strip().split(',')))
+        self.assertGreater(abs(float(row['yaw'])), 1)
+        self.assertEqual(float(row['gyro_yaw']), 0)
+        self.assertEqual(state['pulse_records'][-1]['yaw'], command(0, config.SERVOS['yaw']))
+
+    def test_startup_phases_and_extended_csv_are_consistent(self):
+        _, state, text = self.simulate('normal', save_log=True)
+        self.assertLess(text.index('GYRO_CAL'), text.index('GYRO_DONE'))
+        self.assertLess(text.index('GYRO_DONE'), text.index('PWM_START_REQUEST'))
+        self.assertTrue(state['log_rows'])
+        count = len(RingLog.HEADER.strip().split(','))
+        self.assertEqual(count, 16)
+        self.assertTrue(all(len(row.strip().split(',')) == count for row in state['log_rows']))
+
+    def test_slow_startup_diagnostic_cannot_start_pwm(self):
+        records, state, text = self.simulate('startup_console_delay')
+        self.assertEqual(records, [])
+        self.assertFalse(state.get('out_created', False))
+        self.assertIn('TIMING', text)
+
+    def test_missing_pitch_input_prevents_all_outputs(self):
+        records, state, text = self.simulate('missing_pitch', axes=('roll', 'pitch'))
+        self.assertEqual(records, [])
+        self.assertFalse(state.get('out_created', False))
+        self.assertIn('RX_TIMEOUT', text)
+
+    def test_pitch_input_loss_neutralizes_both_axes(self):
+        records, state, text = self.simulate('pitch_loss', axes=('roll', 'pitch'))
+        self.assertEqual(records[-1][1], {})
+        self.assertEqual(state['pulse_records'][-1], {'roll': 1500, 'pitch': 1500})
+        self.assertIn('RX_TIMEOUT', text)
 
     def test_yaw_uses_rate_command(self):
         records, _, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'))

@@ -6,14 +6,18 @@ alle Dateien speichern und den MCU soft-resetten; Imports sind gecacht.
 Nur Bodenversuch. Kein autonomer Flug, keine Thermiknavigation.
 Koordinaten wie im bisherigen Rolltest: X vorwaerts, Y links, Z oben.
 Roll = atan2(ay, az), Nick = atan2(-ax, sqrt(ay^2+az^2)).
+In diesem Koerperrahmen: +Roll=rechts, +Nick=Nase runter, +Gier=Nase links.
+Nase hoch muss einen negativen Nick-Sollwert erhalten; nicht den Gyro einzeln drehen.
 Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 """
 
-VERSION = '0.2.1-bench'
+VERSION = '0.2.2-bench'
 AUTO_START = False
-# Aktuelles Roll-Tischtestprofil des Besitzers; bei neuer Hardware SENSOR waehlen.
-START_MODE = 'manual'             # sensor / manual / stabilize
-ACTIVE_AXES = ('roll',)            # danach ('roll', 'pitch'), spaeter 'yaw'
+# Naechster Schritt: Sensor-/RX-Pruefung fuer Nick, noch keine neuen Servopulse.
+START_MODE = 'sensor'             # sensor / manual / stabilize
+ACTIVE_AXES = ('roll', 'pitch')    # Gier erst nach Nick, einzeln hinzufuegen
+# Erst nach Sensor- UND MANUAL-Richtungspruefung erweitern. Kein Flugnachweis.
+DIRECTION_CHECKED_AXES = ('roll',) # pitch/yaw physisch noch nicht am MCU geprueft
 ALLOW_ID72_BENCH = True            # fuer diesen getesteten Sensor, kein Typnachweis
 LOOP_US = 10000
 MAX_LOOP_US = 50000                # auch RX-Pollbudget; <= attitude.MAX_DT_S
@@ -41,6 +45,8 @@ NEUTRAL_FRAMES = 25
 SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 200},
           'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150},
           'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150}}
+# pitch/yaw-Zeichen sind Startwerte. +Nick muss Nase-runter-Wirkung, +Gier
+# Nase-links-Wirkung erzeugen. Erst am jeweiligen MANUAL-Test festlegen.
 
 # Zweistufig: Winkelfehler -> Sollrate -> Servo. I-Anteil vorerst 0.
 # Diese Werte sind konservative Bodenversuchsparameter, keine Flugabstimmung.

@@ -14,6 +14,13 @@ Owner-reported setup (2026-10-11):
 Treat these as owner-reported facts, not electrical or control-direction validation.
 Mounted hardware does not automatically authorize enabling additional software axes.
 
+Owner update (2026-10-12): four servos, BEC label 5 V @ 3 A (also marked 20 A);
+elevator/rudder signals still connect directly to receiver CH2/CH4. Basic roll
+MANUAL/stabilization direction tests passed by owner report. A brief loss of
+socket-powered equipment remains unexplained; it returned without a manual reset.
+Continue the current pitch/yaw table-test work on `codex/receiver-timing-hardening`
+as requested. Keep electrical qualification separate from functional roll acceptance.
+
 ## Working boundaries
 
 Keep changes small and preserve the separation of pure mathematics, hardware
@@ -39,7 +46,11 @@ Preserve device calibration; never silently overwrite it during source deploymen
   for those final bounds when integral control is enabled.
 - The running control loop performs no flash writes.
 
-Resolve the documented pitch-sign inconsistency before enabling pitch stabilization.
+The body convention is +roll right, +pitch nose-down, +yaw nose-left. Nose-up
+pitch is negative; preserve the right-handed sensor/gyro transformation.
+Require SENSOR/MANUAL direction checks before adding an axis to
+`DIRECTION_CHECKED_AXES` and permitting its stabilization. This checkbox is
+an operator acknowledgement, not an independent proof of correct wiring.
 Do not infer sensor identity, signal freshness, timing guarantees or flight readiness
 from host tests, register readback or WHO_AM_I alone.
 An independent recovery strategy is required before considering flight operation.
