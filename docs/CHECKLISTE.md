@@ -5,22 +5,23 @@
 - [ ] Im Terminal den Projektordner öffnen:
 
   ```bash
-  cd ~/Documents/Projekte/segelflug-controller
+  cd /Users/jarontreyer/Desktop/Hawk/segelflug-controller
   git status
   ```
 
 - [ ] Prüfen: Auf welchem Branch bin ich? Gibt es uncommittete Änderungen?
-- [ ] Bei einem **neuen Entwicklungsschritt** vom geprüften Stand abzweigen:
+- [ ] Bei einem **neuen Entwicklungsschritt** vom passenden, committeden
+  Abschlussstand abzweigen. Fuer den jetzigen Folgeschritt ist das der neue
+  Commit auf `codex/receiver-timing-hardening`, nicht die aeltere main:
 
   ```bash
-  git switch main
-  git switch -c feature/name-des-schritts
+  git switch -c codex/bench-fault-validation
   ```
 
 - [ ] Bei einem **laufenden Schritt** auf dessen Branch wechseln:
 
   ```bash
-  git switch feature/name-des-schritts
+  git switch codex/receiver-timing-hardening
   ```
 
   Vor einem Branchwechsel offene Änderungen bewusst sichern.
@@ -39,7 +40,7 @@
 - [ ] Hosttests ausführen:
 
   ```bash
-  python3 -m unittest discover -s tests -v
+  PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
   ```
 
 - [ ] Fehler beheben, bevor du die neue Version auf dem MCU testest.
@@ -78,7 +79,9 @@
 - [ ] Sender einschalten und richtige Einstellungen prüfen.
 - [ ] BEC/Batterie anschließen; MCU-Versorgung wie geplant herstellen.
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.
-- [ ] Roll-Funktionstest abgeschlossen; fuer Nick/Gier
+- [ ] Roll/Nick/Gier-Funktionstests laut Besitzer abgeschlossen;
+  [Testbericht](TESTBERICHT_2026-10-13.md) sichern. Weiter mit
+  [Fehler-/Timingqualifikation](NAECHSTE_SCHRITTE.md). Fuer Wiederholungschecks
   [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
   [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md) verwenden.
 - [ ] Neue Achse erst SENSOR/MANUAL pruefen, dann DIRECTION_CHECKED_AXES erweitern.
@@ -114,7 +117,9 @@ Die RAM-Logs gehen beim Stromverlust verloren. Deshalb **erst stoppen und speich
   git diff
   ```
 
-- [ ] Zusammengehörige Dateien auswählen, beispielsweise:
+- [ ] Zusammengehörige Dateien stagen: neue, geaenderte oder geloeschte Dateien
+  fuer den naechsten Commit auswaehlen. `git add` speichert diese Auswahl im
+  Index, aendert weder den MCU noch GitHub. Beispielsweise:
 
   ```bash
   git add firmware/config.py
@@ -136,7 +141,7 @@ Die RAM-Logs gehen beim Stromverlust verloren. Deshalb **erst stoppen und speich
 - [ ] Falls GitHub eingerichtet ist: beim ersten Push dieses Branches:
 
   ```bash
-  git push -u origin feature/name-des-schritts
+  git push -u origin codex/name-des-schritts
   ```
 
   Danach genügt:
@@ -149,14 +154,16 @@ Auch Zwischenstände dürfen committed werden. Beschreibe ehrlich, wenn etwas no
 
 ### 8. Entwicklungsschritt abschließen
 
-**Nur wenn der gesamte Schritt geprüft ist:**
+**Nur wenn der abgegrenzte Schritt geprüft ist:** Bodenfunktion, elektrische
+Qualifikation und Flugfreigabe im Committext getrennt benennen. Fuer den aktuellen
+Abschluss ist ein Commit plus neuer Folgebranch geplant; Merge/Tag sind optional.
 
 - [ ] Offene Änderungen committen.
 - [ ] In `main` übernehmen:
 
   ```bash
   git switch main
-  git merge --ff-only feature/name-des-schritts
+  git merge --ff-only codex/name-des-schritts
   ```
 
 - [ ] Falls der Merge abgelehnt wird: Ursache prüfen, nicht erzwingen.
@@ -173,7 +180,9 @@ Auch Zwischenstände dürfen committed werden. Beschreibe ehrlich, wenn etwas no
   git push origin --tags
   ```
 
-- [ ] Den nächsten Entwicklungsschritt wieder von der aktuellen `main` beginnen.
+- [ ] Den nächsten Entwicklungsschritt von dem Commit mit den benoetigten
+  Aenderungen beginnen. Das ist nur dann `main`, wenn dieser Stand dorthin
+  uebernommen wurde; sonst vom abgeschlossenen Entwicklungsbranch abzweigen.
 
 **Deine tägliche Kurzliste:**
 

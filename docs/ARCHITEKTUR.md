@@ -80,8 +80,11 @@ Die konkrete installierte MicroPython-Version ist noch zu dokumentieren.
 v0.2.2 ergaenzt Startphasen-Tickzeiten und Gyroachsen/Gier-Sollrate in den CSV-Logs.
 CSV-Auswerter muessen den Header lesen; Winkelzeichen und Kalibrierdatei bleiben
 kompatibel. Optional ausgewaehlte RC-Kalibrierachsen bewahren vorhandene Kanaele
-und Levelreferenz. Rollfunktion vom Besitzer bestaetigt, Versorgungsqualifikation
-separat offen; siehe [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md).
+und Levelreferenz. Alle drei Achsenfunktionen sind seit 2026-10-13 vom Besitzer
+bestaetigt, RX-/Servozeichen jeweils -1/-1. Der gespeicherte Stand bleibt SENSOR,
+AUTO_START=False; die Richtungsbestaetigungen bleiben erhalten. Versorgung und
+Fehler-/Timingqualifikation sind separat offen; siehe
+[Testbericht](TESTBERICHT_2026-10-13.md) und [naechste Schritte](NAECHSTE_SCHRITTE.md).
 
 ## Kalibrierung, Referenz, Trimmung
 

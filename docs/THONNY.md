@@ -95,13 +95,16 @@ Wiederherstellung der Automatik nur durch Neustart am Boden.
 
 ## 7. Nick nach abgeschlossenem Roll-Funktionstest
 
-Ab v0.2.2 gilt [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md). Der Besitzer
-bestaetigt den grundlegenden Rolltest; Hoehenruder ist noch direkt am Receiver.
-Signalpfad bei getrennter Versorgung auf CH2->GP8 und GP6->Servo umstellen,
+Ab v0.2.2 gilt [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md). Am 2026-10-13
+meldet der Besitzer alle Achsentests bestanden; [Testbericht](TESTBERICHT_2026-10-13.md).
+Die folgende Reihenfolge dient der erneuten Inbetriebnahme nach Umbauten.
+Erforderlicher Signalpfad: CH2->GP8 und GP6->Servo, nur spannungsfrei umstellen;
 nie Receiver und MCU gleichzeitig an den Servosignal-Draht anschliessen.
 Versorgungsbefund und BEC 5 V @ 3 A beachten: [Warnhinweise](VERSORGUNG_WARNHINWEISE.md).
 
-SENSOR mit Roll+Nick ist vorbereitet. Nase-hoch ergibt negativen pitch_down;
+Gespeichert ist jetzt SENSOR mit allen drei Achsen und Zeichen jeweils -1/-1.
+Fuer eine erneute Einzelpruefung das passende Profil der Achsenanleitung waehlen
+und die betroffene Richtungsbestaetigung zuruecknehmen. Nase-hoch ergibt negativen pitch_down;
 das ist die beibehaltene rechtshaendige Koerperkonvention. calibrate_rc.run(('pitch',))
 kann nur den neuen Kanal erfassen. Erst MANUAL-Richtungen pruefen, dann
 DIRECTION_CHECKED_AXES erweitern und STABILIZE testen. Rollzeichen/Gains beibehalten.
@@ -128,7 +131,10 @@ es einen expliziten Befehl/Modus, bevor wir Werte im Flug speichern.
 
 Loggt 10 Hz in einen RAM-Ring (200 Eintraege = letzte ca.20 Sekunden).
 Ctrl+C stoppt zuerst PWM/PIO und schreibt danach bench_<ticks>.csv auf Flash.
-CSV auf Mac in logs/ herunterladen. Logs werden nicht mit Git committed.
+CSV auf Mac in logs/ herunterladen. Laufende Rohlogs werden nicht mit Git committed.
+Ein bewusst ausgewaehlter kleiner Nachweis darf unter docs/testdaten/ zusammen
+mit Testbericht und Herkunft versioniert werden; so ist der Achsentest von
+2026-10-13 gesichert. Die Serienlogs bleiben ausserhalb der Versionshistorie.
 Vor Stromabschalten: auf erfolgreiche Speicherung warten. Stromausfall
 verliert RAM-Logs. Alte CSV-Dateien nach Sicherung entfernen, sonst Flash voll.
 Freien Speicher mit os.statvfs('/') pruefen. Kein SD-Modul fuer diesen Schritt.

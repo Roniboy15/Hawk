@@ -1,6 +1,6 @@
 # Validierung — v0.2.2-bench
 
-Hostlauf am 2026-10-12: 66 automatische Tests bestanden, CPython 3.9.6.
+Hostlauf am 2026-10-13: 68 automatische Tests bestanden, CPython 3.9.6.
 Alle 13 Firmwaredateien werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
@@ -47,6 +47,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 - Selektive Nick-RC-Kalibrierung bewahrt Roll/Level; nicht aktive Achsen werden
   vor PIO-Start abgelehnt. Startphasenreihenfolge und erweiterte CSV-Spalten stimmen.
 - Langsame PWM-Start-Diagnose ueberschreitet Deadline und erzeugt keine PWM.
+- Nick-/Gier-Vorzeichenpaar -1/-1 bewahrt MANUAL-Pulsrichtung und ordnet
+  Nase-hoch/Rechtsgier negativen Koerperkommandos zu. Beide Knueppelrichtungen
+  aller drei Achsen erzeugen in MANUAL/STABILIZE die gleiche Pulsrichtung.
+  Nick-/Gier-Gegenkorrektur wird auch am berechneten PWM-Puls geprueft.
+
+Beim ersten Hostlauf mit den neuen Zeichen scheiterten zwei alte Erwartungen
+an positive Nick-/Gierkommandos bei 1800-us-RX. Sie wurden wie beim Rolltest
+an die konfigurierte RX-Polung angepasst; zusaetzliche Pulspruefungen sichern
+die zweite Vorzeichenstufe ab. Regler-/Filteralgorithmen und Gains sind unveraendert.
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 
@@ -57,7 +66,7 @@ absenken ergibt positiveren angezeigten Rollwinkel.
 
 Getesteter Rollstand (Commit 4b92223): VERSION=0.2.1-bench, AUTO_START=False, START_MODE='manual', nur Roll
 aktiv, angle_gain=2.0, rate_p=2, rate_i=0, Servo-Limit=200 us, Trim=0.
-Der aktuelle MANUAL-Startmodus ist ein bewusstes Tischtestprofil; SENSOR bleibt
+Der damalige MANUAL-Startmodus war ein bewusstes Tischtestprofil; SENSOR bleibt
 der erste Schritt fuer neuen/geaenderten Hardwareaufbau. Keine weitere
 Gain-Erhoehung aus diesem Bericht ableiten.
 
@@ -66,11 +75,32 @@ Hardwaremessung oder Flugfreigabe. Exakte MCU-Dateien, MicroPython-Version,
 Kalibrierdatei, Worst-Case-Zeiten und Versorgungsmessungen sind noch nicht archiviert.
 Die unten aufgefuehrten elektrischen/Timing-/Fehlerpruefungen bleiben offen.
 
-Der Besitzer schliesst diesen grundlegenden Roll-Funktionstest ab. Naechster
-Schritt ist SENSOR fuer Nick, dann MANUAL-Zeichenpruefung und STABILIZE, danach
-Gier. v0.2.2 ist dafuer vorbereitet: SENSOR, Roll+Nick, DIRECTION_CHECKED_AXES
-enthaelt bislang nur Roll. Ein direkt am Receiver betriebenes Hoehen-/Seitenruder
-belegt noch keine Pruefung seiner MCU-Regelung.
+Der Besitzer schloss den grundlegenden Roll-Funktionstest ab. Der Folgecommit
+4716a63 bereitete v0.2.2 fuer Nick/Gier vor: SENSOR, Roll+Nick, nur Roll als
+richtungsgeprueft markiert. Das ist der historische Vorbereitungsstand.
+
+## Besitzerbericht: alle Achsen, Eingang am 2026-10-13
+
+Der Besitzer meldet alle Achsentests bestanden und die Sender-/Servozeichen
+nach unserer Koerperkonvention angepasst. Der lokale Diff gegen 4716a63 zeigt
+Roll/Nick/Gier aktiv, alle als richtungsgeprueft markiert, STABILIZE als Testmodus
+und RECEIVER/SERVOS jeweils sign=-1. Pins, Limits, Gains, I=0 und Trim=0 sind
+unveraendert. Die physische Richtung/Funktion gilt als vom Besitzer bestaetigt.
+
+Der gelieferte Auszug enthaelt 51 STABILIZE-Samples mit allen drei Ausgaengen,
+neutralen Sollwerten, Gier-Gegenkorrektur passend zur Rechnung und keinen
+protokollierten Puls an einer konfigurierten Grenze. Vollstaendige Auswertung,
+Herkunft und Rohdaten: [TESTBERICHT_2026-10-13.md](TESTBERICHT_2026-10-13.md).
+Die Samples beweisen keine mechanische Wirkung, Funkverlustreaktion,
+Versorgungsreserve oder Laufzeitgrenze. Exakte MCU-Dateien, Runtime,
+calibration.json und tatsaechliche physische Pinpfade sind noch nicht archiviert.
+
+Gespeicherter Abschlussstand: VERSION=0.2.2-bench, AUTO_START=False,
+START_MODE='sensor', ACTIVE_AXES und DIRECTION_CHECKED_AXES beide
+('roll','pitch','yaw'), RX-/Servozeichen jeweils -1/-1. SENSOR ist die einzige
+bewusste Abweichung vom gemeldeten STABILIZE-Testprofil. Er erzeugt keine MCU-PWM.
+Damit ist die grundlegende Achsen-Funktionsphase abgeschlossen; naechster
+Schritt ist [Fehler-/Timingqualifikation am Tisch](NAECHSTE_SCHRITTE.md).
 
 ## Offener Versorgungsbefund am 2026-10-12
 
@@ -81,31 +111,32 @@ Servos, nicht am MCU-5-V-Pin. Zeitpunkt innerhalb des Starts, Verhalten des MCU,
 genauer Stromkreis und Ursache sind unbekannt. Kein Kausalnachweis zur Firmware.
 
 Weitere Besitzerangaben: BEC-Aufschrift 5 V @ 3 A, zusaetzlich 20 A; vier Servos.
-Hoehen-/Seitenrudersignale noch direkt am Receiver. Ursache bleibt unbekannt.
+Hoehen-/Seitenrudersignale waren zu diesem Zeitpunkt noch direkt am Receiver.
+Der spaetere Funktionstest klaert die Ursache der Unterbrechung nicht.
 Bestmoegliche Diagnose und begrenzter Niedervolt-Testaufbau ohne angeschlossenes
 Mac-Netzladegeraet: [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md).
 Softwarevorbereitung geht weiter; daraus folgt keine elektrische Freigabe und
 keine Erlaubnis, einen Netzfehler absichtlich zu reproduzieren.
 
-## Nicht auf Hardware geprueft
+## Weiterhin ohne unabhaengigen Hardware-/Messnachweis
 
 - PIO-Programm/StateMachines und elektrische Pegel auf dem konkreten Board.
-- Registerzugriffe/Filterverhalten des Moduls 0x72 mit dieser neuen Firmware.
+- Exakte Sensoridentitaet, Skalierung und Filtergenauigkeit unter Last/Vibration;
+  grundlegende Funktion wird inzwischen vom Besitzer bestaetigt.
 - Servoversorgung bei drei Achsen, BEC-Einbrueche, Brownouts/Busblockaden.
 - Worst-Case-Laufzeiten inklusive Ausgabe, Garbage Collection, Interrupts.
-- Weitere Ruderwirkungen, mechanische Grenzen und reproduzierbare quantitative
-  Messungen; grundlegende Roll-Richtung wurde nur vom Besitzer bestaetigt.
+- Gemessene mechanische Grenzen und reproduzierbare quantitative Ruderwirkung;
+  grundlegende Richtung aller drei Achsen wurde vom Besitzer bestaetigt.
 - Flugzeugdynamik, Kurvenflug, Stall, Hoehen-/Energieverhalten.
 - Funkverlust, Reichweite, Antenne und Verhalten bei gehaltenen RX-Pulsen.
 - PIO-Neustart/FIFO-Leerung auf dem Board, insbesondere bei anliegender High-Phase.
 - Garantierte Reaktionszeit bei permanentem Bus-/CPU-Haenger oder fehlerhafter
   PWM-Abschaltung; unabhaengiger Hardware-Bypass fehlt.
-- Physische Sender-/Servozeichen von Nick/Gier sind noch offen. Die Koerperkonvention
-  ist dokumentiert/hostgetestet; Checkbox ersetzt keinen Hardwaretest.
+- Archiv der konkreten MCU-Dateien/Runtime/Kalibrierung und physischen Pinpfade;
+  Konsolensamples und Richtungsbestaetigungen ersetzen diese Erfassung nicht.
 - Anti-Windup bei Servo-Trim plus nonzero rate_i bleibt offen. Fuer Tischtests rate_i=0.
 
-Ein bestandener Hosttest ist kein Flugtest. Der konkrete Upload beginnt
-deshalb mit SENSOR, nur Roll aktiv, dann MANUAL, dann STABILIZE.
-Grundlegender Rolltest: [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md). Naechste Achsen:
-[PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md), je Achse erst physische Zeichen
-pruefen, dann Stabilisierung. Keine Aussagen zur Flugtauglichkeit.
+Ein bestandener Hosttest ist kein Flugtest. Nach Hardware-/Polungsaenderungen
+betroffene Richtungsbestaetigung zuruecknehmen und SENSOR, MANUAL, dann STABILIZE
+wiederholen. Anleitungen: [ROLL_TISCHTEST.md](ROLL_TISCHTEST.md) und
+[PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md). Keine Aussagen zur Flugtauglichkeit.

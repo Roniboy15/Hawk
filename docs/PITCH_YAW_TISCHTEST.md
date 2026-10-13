@@ -1,14 +1,19 @@
-# Nick und Gier — naechste beaufsichtigte Tischtests
+# Nick und Gier — Anleitung fuer beaufsichtigte Tischtests
 
-Stand v0.2.2-bench. Grundlegender Roll-Funktionstest vom Besitzer bestanden;
-Rollzeichen -1/-1 und rate_p=2 unveraendert. Elektrische/Timing-/Flugqualifikation
-ist separat offen. Wir bleiben fuer diesen Ausbau auf dem bisherigen Branch.
+Stand 2026-10-13, v0.2.2-bench: Der Besitzer meldet alle Achsentests bestanden.
+RX-/Servozeichen sind fuer alle Achsen -1/-1; Roll rate_p=2 bleibt unveraendert.
+[Testbericht](TESTBERICHT_2026-10-13.md) trennt Besitzerangaben und Lognachweis.
+Elektrische/Timing-/Flugqualifikation ist separat offen; weiter mit
+[NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md).
 
-Der Besitzer bestaetigt: Hoehen-/Seitenrudersignale gehen bisher DIREKT zum
-Receiver. Receiverbetrieb prueft noch keinen dieser MCU-Ausgaenge. Zuerst
+Diese Anleitung bleibt fuer erneute Pruefungen nach Umbauten bestehen. Sie zeigt
+die schrittweisen Pruefprofile, nicht die aktuelle Drei-Achsen-Konfiguration.
+Beim Beginn dieser Testreihe gingen Hoehen-/Seitenrudersignale noch direkt zum
+Receiver; fuer MCU-Regelung ist der unten beschriebene Signalpfad erforderlich.
+Receiverbetrieb prueft noch keinen dieser MCU-Ausgaenge. Zuerst
 [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md) beachten: BEC 5 V @ 3 A,
-vier Servos, ungeklärte Netzunterbrechung. Die Software ist fuer den SENSOR-Schritt
-vorbereitet, erzeugt dort keine PWM und autorisiert keine ungepruefte Versorgung.
+vier Servos, ungeklärte Netzunterbrechung. SENSOR erzeugt keine MCU-PWM und
+autorisiert keine ungepruefte Versorgung.
 
 ## Koerperkonvention ohne Umbau des Filters
 
@@ -37,7 +42,7 @@ nicht bei jedem Start neu speichern. Bei unveraenderter Montage weiterverwenden.
 4. Alle zusammengehoerigen v0.2.2-Firmwaremodule hochladen, vorhandene MCU-Kalibrierung
    nicht ueberschreiben. Stop/Soft-Reboot wegen gecachter Imports.
 
-Die vorbereitete Konfiguration ist:
+Pruefprofil fuer eine erneute Nick-Inbetriebnahme (betroffene Bestaetigung entfernen):
 
 ```python
 AUTO_START = False
@@ -81,7 +86,8 @@ RECEIVER['pitch']['sign'] so setzen, dass Nase-hoch-Knueppel einen NEGATIVEN
 Nick-Sollwert ausgibt: bei steigendem RX-Puls -1, bei fallendem RX-Puls +1.
 SERVOS['pitch']['sign'] so setzen, dass positives internes Kommando physisch
 Nase-runter-Wirkung liefert: groesserer Puls bewirkt Nase runter => +1;
-groesserer Puls bewirkt Nase hoch => -1. Defaultwerte sind keine Hardwarebestaetigung.
+groesserer Puls bewirkt Nase hoch => -1. Das bestaetigte Besitzerprofil ist
+-1/-1; nach Umbauten sind gespeicherte Werte keine neue Hardwarebestaetigung.
 
 Nach jeder Konfigurationsaenderung Stop/Soft-Reboot. Pull-up und push-down muessen
 physisch stimmen, Sollwerte muessen zur Koerperkonvention passen. MANUAL reagiert

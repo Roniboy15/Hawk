@@ -420,6 +420,20 @@ class PureTests(unittest.TestCase):
             self.assertEqual(actual, legacy)
         self.assertEqual(command(0, config.SERVOS['roll']), 1500)
 
+    def test_pitch_yaw_sign_pairs_preserve_manual_and_match_body_targets(self):
+        # Besitzerprofil: hoher RX-Puls = Nase hoch / Gier rechts, beides negativ.
+        # Beispiel-Endpunkte, keine Behauptung ueber die Kalibrierdatei am MCU.
+        cal = {'min': 1000, 'center': 1500, 'max': 2000}
+        for axis in ('pitch', 'yaw'):
+            legacy_servo = dict(config.SERVOS[axis], sign=1)
+            for pulse, body_sign in ((1000, 1), (2000, -1)):
+                with self.subTest(axis=axis, pulse=pulse):
+                    stick = normalize(pulse, cal, config.RECEIVER[axis]['sign'])
+                    self.assertGreater(stick*body_sign, 0)
+                    actual = command(stick*config.SERVOS[axis]['limit'], config.SERVOS[axis])
+                    legacy = command(normalize(pulse, cal)*legacy_servo['limit'], legacy_servo)
+                    self.assertEqual(actual, legacy)
+
     def test_calibration_roundtrip(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(pathlib.Path(directory)/'calibration.json')
@@ -502,6 +516,8 @@ class FlowTests(unittest.TestCase):
                         c['pulse'] = 1500
                     if scenario == 'stick_right' and state['iteration'] >= 4:
                         c['pulse'] = 1000
+                    if scenario in ('stick_low', 'stick_high') and state['iteration'] >= 4:
+                        c['pulse'] = 1000 if scenario == 'stick_low' else 2000
                     if scenario == 'timing_rearm' and 5 <= state['iteration'] <= 7:
                         c['pulse'] = 1500
                         state['invalid'] = False
@@ -667,7 +683,7 @@ class FlowTests(unittest.TestCase):
         records, _, text = self.simulate('normal', axes=('roll', 'pitch'))
         self.assertIn('STABILIZE', text)
         self.assertGreater(records[-1][1]['roll']*config.RECEIVER['roll']['sign'], 0)
-        self.assertGreater(records[-1][1]['pitch'], 0)
+        self.assertGreater(records[-1][1]['pitch']*config.RECEIVER['pitch']['sign'], 0)
 
     def test_right_stick_has_same_physical_direction_in_manual_and_stabilize(self):
         for mode in ('manual', 'stabilize'):
@@ -675,6 +691,18 @@ class FlowTests(unittest.TestCase):
                 _, state, _ = self.simulate('stick_right', mode=mode)
                 # In diesem verifizierten Aufbau bedeutet kleinerer Servopuls Rechtsrollen.
                 self.assertLess(state['pulse_records'][-1]['roll'], config.SERVOS['roll']['center'])
+
+    def test_all_axes_keep_stick_pulse_direction_in_manual_and_stabilize(self):
+        # Zweite Vorzeichenstufe mitpruefen: gleiche physische Knueppelrichtung
+        # braucht gleiche Pulsrichtung in beiden Modi, nicht gleichen Ausschlag.
+        for scenario, pulse_sign in (('stick_low', -1), ('stick_high', 1)):
+            for mode in ('manual', 'stabilize'):
+                with self.subTest(scenario=scenario, mode=mode):
+                    _, state, _ = self.simulate(scenario, mode=mode,
+                                               axes=('roll', 'pitch', 'yaw'))
+                    for axis in ('roll', 'pitch', 'yaw'):
+                        deviation = state['pulse_records'][-1][axis]-command(0, config.SERVOS[axis])
+                        self.assertGreater(deviation*pulse_sign, 0)
 
     def test_centered_stick_opposes_both_bank_directions(self):
         for scenario, correction_sign in (('bank_right', 1), ('bank_left', -1)):
@@ -686,20 +714,24 @@ class FlowTests(unittest.TestCase):
                 self.assertIn('STABILIZE', text)
 
     def test_pitch_feedback_opposes_nose_up_and_down(self):
-        # Testfixture: positive Pitchkommandos/Servopulse bedeuten Nase runter.
-        # Physische pitch/yaw-Polung bleibt separat am Flugzeug zu pruefen.
+        # +Pitchkommando = Nase runter. Im bestaetigten -1-Servoprofil braucht
+        # dies einen kleineren Puls; nur ein Kommando-Test wuerde falsche PWM uebersehen.
         for scenario, offset_sign in (('nose_up', 1), ('nose_down', -1)):
             with self.subTest(scenario=scenario):
-                records, _, _ = self.simulate(scenario, axes=('roll', 'pitch'))
+                records, state, _ = self.simulate(scenario, axes=('roll', 'pitch'))
                 self.assertGreater(records[-1][1]['pitch']*offset_sign, 0)
                 self.assertAlmostEqual(records[-1][1]['roll'], 0, places=6)
+                deviation = state['pulse_records'][-1]['pitch']-command(0, config.SERVOS['pitch'])
+                self.assertGreater(deviation*(-offset_sign), 0)
 
     def test_yaw_feedback_opposes_left_and_right_turn_rate(self):
         # +Koerper-Gier ist links. Bei Drehung nach links muss Kommando negativ sein.
         for scenario, offset_sign in (('yaw_left', -1), ('yaw_right', 1)):
             with self.subTest(scenario=scenario):
-                records, _, _ = self.simulate(scenario, axes=('roll', 'pitch', 'yaw'))
+                records, state, _ = self.simulate(scenario, axes=('roll', 'pitch', 'yaw'))
                 self.assertGreater(records[-1][1]['yaw']*offset_sign, 0)
+                deviation = state['pulse_records'][-1]['yaw']-command(0, config.SERVOS['yaw'])
+                self.assertGreater(deviation*(-offset_sign), 0)
 
     def test_yaw_returns_to_trim_after_rotation_stops_at_new_heading(self):
         _, state, _ = self.simulate('yaw_stopped', axes=('roll', 'pitch', 'yaw'), save_log=True)
@@ -737,7 +769,7 @@ class FlowTests(unittest.TestCase):
 
     def test_yaw_uses_rate_command(self):
         records, _, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'))
-        self.assertGreater(records[-1][1]['yaw'], 0)
+        self.assertGreater(records[-1][1]['yaw']*config.RECEIVER['yaw']['sign'], 0)
 
 
 if __name__ == '__main__':

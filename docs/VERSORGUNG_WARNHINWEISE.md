@@ -8,8 +8,12 @@ zurueck. Mac am Netzladegeraet; MCU via Mac-USB-C; BEC laut Besitzer nur am
 Servoversorgungszweig, nicht am MCU-5-V-Pin. Vier Servos waren versorgt/in Betrieb.
 Die Beschriftung lautet 5 V @ 3 A und zusaetzlich gross 20 A. Modell, Peak-Rating,
 Strom-/Spannungsverlauf und genauer Zeitpunkt sind unbekannt.
-Hoehen-/Seitenruder gehen noch direkt zum Receiver. Diese Servos koennen daher
-unabhaengig von app.run() bereits Pulse erhalten und Strom aufnehmen.
+Hoehen-/Seitenruder gingen zu diesem Zeitpunkt noch direkt zum Receiver. Diese
+Servos konnten daher unabhaengig von app.run() bereits Pulse erhalten und Strom aufnehmen.
+
+Update 2026-10-13: alle Achsen-Funktionstests laut Besitzer bestanden;
+[Testbericht](TESTBERICHT_2026-10-13.md). Das klaert die Ursache der damaligen
+Unterbrechung und die Versorgungsreserve nicht. Die folgenden Hinweise bleiben gueltig.
 
 ## Beste Diagnose mit diesen Angaben
 

@@ -6,12 +6,18 @@ montiert und angeschlossen. Stromversorgung, Signalpegel und Ruderwirkung
 sind damit noch nicht qualifiziert. Kein unabhaengiger Hardware-Bypass vorhanden.
 
 Stand 2026-10-12: Der Besitzer bestaetigt MANUAL und Rollstabilisierung mit
-beiden Rollzeichen=-1 und rate_p=2. Das aktuelle gespeicherte Profil startet
-MANUAL bei AUTO_START=False. Neue/geaenderte Hardware weiterhin zuerst SENSOR.
+beiden Rollzeichen=-1 und rate_p=2. Der damalige Stand 4b92223 startete MANUAL
+bei AUTO_START=False. Der aktuelle Drei-Achsen-Stand startet wieder SENSOR.
+Neue/geaenderte Hardware weiterhin zuerst SENSOR.
 Der grundlegende Roll-Funktionstest ist damit vom Besitzer abgeschlossen;
 Versorgungs-/Timingqualifikation bleibt separat offen. Weiter mit
 [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
 [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md). Keine Flugfreigabe.
+
+Stand 2026-10-13: auch Nick/Gier-Funktionstests laut Besitzer bestanden.
+Siehe [Testbericht](TESTBERICHT_2026-10-13.md) und
+[naechster Entwicklungsschritt](NAECHSTE_SCHRITTE.md). Die folgende Rollanleitung
+bleibt fuer gezielte Wiederholungspruefungen erhalten.
 
 ## Vorbereitung
 
@@ -74,5 +80,5 @@ Nicht wiederholt resetten, um ein auffaelliges Verhalten zu uebergehen.
 - Ctrl+C: PWM/PIO-Abschaltung und danach Logexport abwarten. Bei Meldung
   "Abschalten unvollstaendig" Versorgung trennen; kein Export erfolgt.
 - Log sichern und je Phase PASS/FAIL, Ruderwirkung, Modus, Fehler und Parameter
-  dokumentieren. Erst wenn alle Rollphasen reproduzierbar bestehen, Nick-Konvention
-  aufloesen und weitere Achsen vorbereiten. Ein Tischtest prueft keine Flugstabilitaet.
+  dokumentieren. Bei erneuter Inbetriebnahme erst nach bestandenen Rollphasen
+  weitere Achsen gemaess Nick-/Gieranleitung pruefen. Ein Tischtest prueft keine Flugstabilitaet.

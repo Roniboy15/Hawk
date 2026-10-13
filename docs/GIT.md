@@ -61,14 +61,29 @@ git commit -m "RC- und Lagenkalibrierung fuer mein Flugzeug"
 ```
 
 Wenn calibration.json noch nicht existiert, erst kalibrieren; nicht eine leere
-Datei erstellen. Beim Abziehen/Umstecken nie die Motorversorgung eingeschaltet lassen.
+Datei erstellen. Beim Umstecken USB und Servo-/BEC-Versorgung trennen.
+Dieser Segler hat kein Triebwerk.
+
+### Aktueller Abschlussstand (2026-10-13)
+
+Alle Achsen-Funktionstests sind laut Besitzer bestanden. Die aktuelle Arbeit
+liegt auf `codex/receiver-timing-hardening`; der Besitzer hat den Abschlusscommit
+und Folgebranch am 2026-10-13 freigegeben. Die zusammengehoerigen Konfigurations-/
+Test-/Doc-Aenderungen gemeinsam stagen und committen, dann davon `codex/bench-fault-validation`
+abzweigen. main ist derzeit aelter und enthaelt diese Aenderungen noch nicht.
+Details: [NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md).
+
+Staging ist die Auswahl des naechsten Commitinhalts: `git add` erfasst auch
+Aenderungen an bestehenden Dateien und Loeschungen. `git diff --staged` zeigt
+diese Auswahl. Spaetere Datei-Aenderungen brauchen erneut `git add`.
+Committen speichert einen lokalen Snapshot; weder Upload noch Flugfreigabe.
 
 ## 4. Jede kleine Aenderung: derselbe Ablauf
 
 Beispiel: nur Roll-Reglerparameter aendern.
 
 ```bash
-git switch -c test/roll-abstimmung
+git switch -c codex/roll-abstimmung
 ```
 
 Dann config.py lokal in Thonny bearbeiten und auf dem Mac speichern. Danach:
@@ -97,7 +112,7 @@ Nach bestandenem Vergleich die Testversion in main uebernehmen:
 
 ```bash
 git switch main
-git merge --ff-only test/roll-abstimmung
+git merge --ff-only codex/roll-abstimmung
 git tag -a v0.2.1-roll-boden -m "Roll am Boden geprueft"
 ```
 
@@ -108,7 +123,7 @@ erst Verlauf ansehen und die Zusammenfuehrung bewusst entscheiden.
 
 ```bash
 git log --oneline --decorate -10
-git switch -c vergleich/alte-version v0.2.0-bench
+git switch -c codex/vergleich-alte-version v0.2.0-bench
 ```
 
 So entsteht ein eigener Branch vom markierten Stand. Alle Firmwaredateien

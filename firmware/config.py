@@ -13,11 +13,13 @@ Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 
 VERSION = '0.2.2-bench'
 AUTO_START = False
-# Naechster Schritt: Sensor-/RX-Pruefung fuer Nick, noch keine neuen Servopulse.
-START_MODE = 'sensor'             # sensor / manual / stabilize
-ACTIVE_AXES = ('roll', 'pitch')    # Gier erst nach Nick, einzeln hinzufuegen
-# Erst nach Sensor- UND MANUAL-Richtungspruefung erweitern. Kein Flugnachweis.
-DIRECTION_CHECKED_AXES = ('roll',) # pitch/yaw physisch noch nicht am MCU geprueft
+# Besitzer meldet am 2026-10-13 alle Achsentests bestanden. Gespeicherter Stand
+# startet zur erneuten Sichtpruefung ohne PWM; STABILIZE bewusst am Tisch waehlen.
+START_MODE = 'sensor'              # sensor / manual / stabilize
+ACTIVE_AXES = ('roll', 'pitch', 'yaw')
+# SENSOR/MANUAL/STABILIZE laut Besitzer bestanden; kein elektrischer/Flugnachweis.
+# Nach anderer Verdrahtung, Polung oder Montage betroffene Bestaetigung entfernen.
+DIRECTION_CHECKED_AXES = ('roll', 'pitch', 'yaw')
 ALLOW_ID72_BENCH = True            # fuer diesen getesteten Sensor, kein Typnachweis
 LOOP_US = 10000
 MAX_LOOP_US = 50000                # auch RX-Pollbudget; <= attitude.MAX_DT_S
@@ -35,18 +37,20 @@ PITCH_CONTROL_LIMIT_DEG = 75.0    # Euler-Reglerbereich, keine Sensorgrenze
 # GP-Nummern, NICHT physische Pinpositionen. GP3 bleibt Y-Querruder-Ausgang.
 # Rechtsknueppel liefert kleinere Pulse, Rechtsbank ist positiver Rollwinkel.
 # Beide Rollzeichen gemeinsam -1: MANUAL bleibt gleich, Feedback wird korrekt.
+# Nick/Gier ebenfalls -1/-1 nach Besitzerpruefung: groesserer RX-Puls fordert
+# Nase-hoch/Rechtsgier (negative Koerperwerte); groesserer Servopuls wirkt so.
 RECEIVER = {'roll': {'pin': 2, 'sign': -1},
-            'pitch': {'pin': 8, 'sign': 1},
-            'yaw': {'pin': 9, 'sign': 1}}
+            'pitch': {'pin': 8, 'sign': -1},
+            'yaw': {'pin': 9, 'sign': -1}}
 RX_TIMEOUT_MS = 100
 NEUTRAL_WINDOW = 0.08
 NEUTRAL_FRAMES = 25
 
 SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 200},
-          'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150},
-          'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': 1, 'limit': 150}}
-# pitch/yaw-Zeichen sind Startwerte. +Nick muss Nase-runter-Wirkung, +Gier
-# Nase-links-Wirkung erzeugen. Erst am jeweiligen MANUAL-Test festlegen.
+          'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150},
+          'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150}}
+# Mit dieser Servopolung erzeugt ein positives internes Nick-/Gierkommando
+# kleinere Pulse: Nase-runter-/Nase-links-Wirkung. Logauswertung: VALIDIERUNG.md.
 
 # Zweistufig: Winkelfehler -> Sollrate -> Servo. I-Anteil vorerst 0.
 # Diese Werte sind konservative Bodenversuchsparameter, keine Flugabstimmung.

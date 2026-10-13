@@ -18,8 +18,19 @@ Owner update (2026-10-12): four servos, BEC label 5 V @ 3 A (also marked 20 A);
 elevator/rudder signals still connect directly to receiver CH2/CH4. Basic roll
 MANUAL/stabilization direction tests passed by owner report. A brief loss of
 socket-powered equipment remains unexplained; it returned without a manual reset.
-Continue the current pitch/yaw table-test work on `codex/receiver-timing-hardening`
-as requested. Keep electrical qualification separate from functional roll acceptance.
+The pitch/yaw table-test work was continued on `codex/receiver-timing-hardening`
+as requested. Keep electrical qualification separate from functional acceptance.
+
+Owner update (2026-10-13): the owner reports all axis tests passed and adjusted
+both receiver and servo signs to -1 for roll/pitch/yaw. Supplied console samples
+show all three MCU output values in STABILIZE with neutral sticks; they do not
+independently prove actual pin wiring, mechanical effect or error recovery.
+Basic direction/function acceptance is owner-reported; power, timing and fault
+qualification remain open. See docs/TESTBERICHT_2026-10-13.md for evidence.
+The owner approved this completion commit and the next branch on 2026-10-13.
+The next branch is
+`codex/bench-fault-validation`, starting from this completed step's commit;
+do not branch from an older main or treat a bench commit as a flight release.
 
 ## Working boundaries
 

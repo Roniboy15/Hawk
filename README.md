@@ -11,22 +11,26 @@ Winkelregelung und optional Gier-Drehratenregelung, aber keine Flugnavigation.
 kein Triebwerk und kein Gas. Laut Besitzer sind alle Servos montiert und an
 den vorgesehenen Kanaelen angeschlossen; Signalpegel und Ruderwirkungen
 muessen trotzdem gemessen/geprueft werden. Eine gemeinsame Stromleiste ist geplant.
-Die bisher
-funktionierende Firmware auf dem Mac sichern. Der grundlegende Rolltest wurde
-vom Besitzer bestaetigt; weitere Achsen, elektrische Grenzen und Worst-Case-Timing
-sind noch zu pruefen. Keine Flugabstimmung aus diesem Tischtest ableiten.
+Die funktionierende Firmware und Geraetekalibrierung auf dem Mac sichern.
+Am 2026-10-13 meldet der Besitzer die Funktionstests aller drei Achsen bestanden;
+RX-/Servozeichen sind jetzt jeweils -1/-1. Die beigefuegten STABILIZE-Samples
+passen zur Regelrechnung. Elektrische Grenzen, Fehlerreaktionen und
+Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ableiten.
 
 ## Start hier
 
-1. [THONNY.md](docs/THONNY.md): Dateien hochladen, kalibrieren, Roll erneut testen,
-   Nick hinzufuegen, anschliessend Gier.
-2. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
-3. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
-4. [VALIDIERUNG.md](docs/VALIDIERUNG.md): getestete und noch offene Eigenschaften.
-5. [ROLL_TISCHTEST.md](docs/ROLL_TISCHTEST.md): grundlegender Rolltest vom Besitzer bestanden.
-6. [PITCH_YAW_TISCHTEST.md](docs/PITCH_YAW_TISCHTEST.md): naechste Schritte,
-   Signalpfad vom Receiver zum MCU umstellen, dann je Achse SENSOR/MANUAL/STABILIZE.
-7. [VERSORGUNG_WARNHINWEISE.md](docs/VERSORGUNG_WARNHINWEISE.md): beste Diagnose
+1. [TESTBERICHT_2026-10-13.md](docs/TESTBERICHT_2026-10-13.md): abgeschlossener
+   Achsen-Funktionstest, Logauswertung und Grenzen des Nachweises.
+2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): naechster Branch fuer
+   reproduzierbare Fehler-/Timingpruefung, danach Rueckfallebene und Simulation.
+3. [THONNY.md](docs/THONNY.md): Dateien hochladen, kalibrieren, Achsentests wiederholen.
+4. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
+5. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
+6. [VALIDIERUNG.md](docs/VALIDIERUNG.md): getestete und noch offene Eigenschaften.
+7. [ROLL_TISCHTEST.md](docs/ROLL_TISCHTEST.md): Anleitung fuer erneute Rollpruefung.
+8. [PITCH_YAW_TISCHTEST.md](docs/PITCH_YAW_TISCHTEST.md): Anleitung fuer erneute
+   SENSOR/MANUAL/STABILIZE-Pruefung nach Umbauten.
+9. [VERSORGUNG_WARNHINWEISE.md](docs/VERSORGUNG_WARNHINWEISE.md): beste Diagnose
    zum Versorgungsereignis und Warnhinweise fuer BEC 5 V @ 3 A / vier Servos.
 
 v0.2.1 verwirft RC-Puffer bei zu langer Pollpause/vollem FIFO, bewertet Pulsalter
@@ -35,7 +39,9 @@ Deadline-Ueberschreitung. Timingfehler verlangen neue Neutralfreigabe vor dem
 manuellen Ersatz. Parameterpruefung und Abschaltversuche sind erweitert.
 Das ist Hostvalidierung, keine bestaetigte Hardwarequalifikation.
 
-v0.2.2 startet SENSOR mit Roll+Nick; es erzeugt keine MCU-Servopulse.
+Der abgeschlossene v0.2.2-Stand startet SENSOR mit Roll+Nick+Gier; dort gibt es
+keine MCU-Servopulse. AUTO_START bleibt False. Das Besitzer-Testprofil war
+STABILIZE; zum erneuten Aktuatortest diesen Modus bewusst einstellen.
 DIRECTION_CHECKED_AXES blockiert STABILIZE fuer ungepruefte neue Achsen.
 Die Koerperkonvention bleibt +Roll rechts, +Nick Nase runter, +Gier Nase links;
 pitch_down zeigt daher negative Werte beim Nase-anheben. Kalibrierschema 1
@@ -73,15 +79,17 @@ GP bedeutet GPIO-Nummer, niemals physische Pinposition.
 | MPU VCC / GND | MCU 3V3 / gemeinsame Masse | Aktiv |
 | CH1 Querruder-Signal | GP2 | Aktiv, Pegel muss 3,3-V-kompatibel sein |
 | Querruder Y-Kabel-Signal | GP3 | Ein gemeinsamer Ausgang |
-| CH2 Hoehenruder-Signal | GP8 | SENSOR-Profil vorbereitet; Signalpfad noch umstellen |
-| Hoehenruder-Servo-Signal | GP6 | Laut Besitzer bisher direkt am Receiver |
-| CH4 Seitenruder-Signal | GP9 | Nach Nick-Test hinzufuegen |
-| Seitenruder-Servo-Signal | GP7 | Laut Besitzer bisher direkt am Receiver |
+| CH2 Hoehenruder-Signal | GP8 | Im abgeschlossenen Achsenprofil konfiguriert |
+| Hoehenruder-Servo-Signal | GP6 | MCU-Pulswerte im Besitzerlog enthalten |
+| CH4 Seitenruder-Signal | GP9 | Im abgeschlossenen Achsenprofil konfiguriert |
+| Seitenruder-Servo-Signal | GP7 | MCU-Pulswerte im Besitzerlog enthalten |
 | Gas/Triebwerk | Nicht vorhanden | Keine Throttle-Funktion |
 | Receiver/Servo Plus | BEC 5 V | Ausreichende Strombelastbarkeit pruefen |
 | Alle GND | Gemeinsame Minusleiste | Auch MCU-GND anschliessen |
 
 MCU im USB-Test ueber USB versorgen, BEC-Plus nicht an dessen 5-V-Pin.
+Die Tabelle beschreibt die Software-Pinbelegung; der Logauszug ist kein
+unabhaengiger Nachweis der physischen Verkabelung oder Signalpegel.
 Bei allen zusaetzlichen RC-Eingaengen Signalpegel pruefen/anpassen. Die
 Receiver-Versorgungsspannung sagt nicht die Spannung der PWM-Pulse aus.
 Servos nicht aus dem 3V3-Pin des MCU speisen. Versorgung beim Umstecken trennen.
@@ -105,15 +113,16 @@ Software-Differenzierung. Die vorhandene funktionierende Mechanik beibehalten.
   koennen seine Gravitationskorrektur beeinflussen.
 - MANUAL_FALLBACK bedeutet Software-Ersatz bei laufendem MCU und gueltigem RX,
   keinen sicheren Weiterflug bei CPU-Haenger, Stromausfall oder blockiertem I2C.
-- Nick-/Gier-Konvention ist explizit, physische Servo-/Senderzeichen sind noch
-  zu pruefen. DIRECTION_CHECKED_AXES erst nach SENSOR/MANUAL-Checks erweitern.
+- Nick-/Gier-Konvention und physische Zeichen sind vom Besitzer funktional
+  bestaetigt. Bei geaenderten Pins, Polung oder Montage die betroffenen Eintraege
+  aus DIRECTION_CHECKED_AXES entfernen und SENSOR/MANUAL erneut pruefen.
 
 ## Tests auf dem Mac
 
 Keine Zusatzpakete erforderlich (Python 3):
 
 ```bash
-python3 -m unittest discover -s tests -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
 
 ## Quellen / Designbezug
