@@ -33,13 +33,38 @@ step's commit f66ccd1;
 do not branch from an older main or treat a bench commit as a flight release.
 
 v0.2.3 adds bounded per-iteration timing aggregates, a transition ring and CSV/JSON
-reports exported only after confirmed shutdown. Physical acceptance is pending;
-follow docs/FEHLER_TISCHTEST.md and record results in its protocol template.
+reports exported only after confirmed shutdown. Physical results and open items
+are in docs/testdaten/Tischtests_v0.2.3-bench/; use docs/FEHLER_TISCHTEST.md.
 bench_test.run(profile) is an explicit operator entry, never an automatic launcher.
 Its pitch-range profile temporarily sets the real pitch boundary to 20 degrees;
 it restores RAM configuration on return and does not inject an I2C or timing fault.
 tools/analyze_bench.py runs on the host, not the MCU. A software-protocol PASS
 does not validate electrical signals, servo mechanics or an independent fallback.
+
+Owner update (2026-10-18), actual v0.2.3 reports: T2 neutral gating passed;
+first T1 latched IMU_RUNTIME at 51228 ms, a later T1 repeat passed without PWM
+or faults. Original T1 files were replaced by the owner; keep the first findings
+separate from the repeat and preserve archived run copies. New reports identify
+MicroPython v1.29.0 / RP2040-Zero; runtime/calibration snapshots are now archived.
+Work times reach about 29-30 ms despite the 10-ms target; no hard timing trip.
+Abrupt USB removal without Ctrl+C caused extreme rudder movement while BEC and
+common ground remained connected. Correct shutdown avoided it by owner report.
+Stop, await exports, turn BEC/receiver/servos off, download with USB connected,
+then remove USB. Do not deliberately reproduce power loss with mounted actuators.
+Further owner update (2026-10-18): T3/T5/T6 functioned as expected. T3 data prove
+all three missing-start-channel cases; T5 has fault-free stabilization for about
+95 s but averages only 74.92 Hz, with work >10 ms in 99.44% of iterations.
+T6 proves PITCH_RANGE latching; later yaw pulse loss causes RX_TIMEOUT and neutral
+outputs, ending without recovery. The owner subsequently confirmed a connector
+fell out; record this as the owner-reported cause, consistent with the logged
+yaw pulse loss, not an unexplained receiver/software fault. Secure the connection
+before repeat tests. T4 is deliberately OPEN because no signal switch was
+installed; the incidental T6 event does not replace it. Only one T5 run is archived.
+The T6 frozen pitch plus level reference is consistent with the negative 20-degree
+boundary. Preserve calibration/signs; account for the absolute boundary in repeats.
+Next code scope is timing/fault diagnostics, not gain tuning or navigation.
+See docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md and
+docs/NAECHSTE_SCHRITTE.md. Do not label all fault/timing qualification complete.
 
 ## Working boundaries
 

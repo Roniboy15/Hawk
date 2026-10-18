@@ -5,6 +5,15 @@ und beobachtetes Timing pruefen. Pins, Servozeichen -1/-1, Gains und Grenzen
 bleiben wie beim bestandenen Drei-Achsen-Test. Nur beaufsichtigt am Tisch.
 Keine absichtliche Netzstoerung, Buskurzschluesse oder Servo-Blockaden.
 
+**Teststand 2026-10-18:** T1-Wiederholung/T2/T3 funktional bestanden. Besitzer
+meldet T5/T6 wie erwartet; CSV/JSON bestaetigen Stabilisierung und Verriegelung.
+T4 bleibt bewusst OFFEN. T5 erreicht im Mittel 74.92 statt 100 Hz. T6 zeigt
+spaeter Gier-Pulsverlust mit Trimneutral; der Besitzer bestaetigt einen
+herausgefallenen Stecker. Verbindung vor Wiederholungen sichern. Timing,
+erster T1-IMU_RUNTIME und USB-Stromverlust bleiben offen.
+Details: [aktuelle Auswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md),
+[T1/T2](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
+
 ## Einmal vorbereiten
 
 1. Bisherige MCU-Dateien und calibration.json in einem eigenen Mac-Ordner sichern.
@@ -34,15 +43,22 @@ bzw. je nach Thonny-Verhalten die RAM-Einstellung neu laden.
 Sender/Versorgung bereit, Modell waehrend ca. sechs Sekunden Gyrokalibrierung
 unbewegt lassen. Einen unten genannten Test starten. Am Ende Ctrl+C, dann auf
 `PWM/PIO ausgeschaltet`, `RAM-Log gespeichert: bench_...csv` UND
-`Laufbericht gespeichert: bench_...json` warten. Erst dann Versorgung trennen.
+`Laufbericht gespeichert: bench_...json` warten. Danach zuerst BEC-/Receiver-/
+Servoversorgung ausschalten, waehrend USB den MCU weiter versorgt. Beide Dateien
+bei bestehender USB-Verbindung in Thonny herunterladen; USB zuletzt trennen.
+USB-Abziehen ist kein Ersatz fuer Ctrl+C: RAM-Logverlust und unkontrollierte
+Ruderwirkung sind beim abrupten MCU-Stromausfall moeglich.
 Bei unvollstaendiger Abschaltung Versorgung trennen und Ursache klaeren;
-in diesem Fall wird bewusst kein CSV/JSON exportiert.
+in diesem Fall zuerst Servoversorgung abschalten, USB danach; kein CSV/JSON-Export.
 
 Beide Dateien **nach jedem Lauf** auf den Mac in getrennte Ordner herunterladen,
 z.B. logs/T1/, logs/T2/, logs/T3-roll/. Nicht umbenennen; gleiche Nummer gehoert
 zusammen. Vor dem naechsten Lauf sichern: Board-Dateinamen koennen sich bei
 Neustarts wiederholen. Mechanische Beobachtung im
 [Testprotokoll](TESTPROTOKOLL_FEHLER.md) notieren; Logpulse sind keine GPIO-Messung.
+Thonny: Ansicht/View -> Dateien/Files, MCU-Datei per Kontextmenue herunterladen.
+Dafuer ist kein USB-Neuverbinden noetig; siehe
+[Thonny-Dokumentation](https://github.com/thonny/thonny/wiki/MicroPython#managing-other-files).
 
 ## T1 — SENSOR und voller Diagnose-Ring (30 Sekunden)
 
@@ -99,6 +115,10 @@ Der interne GPIO-Pulldown haelt einen offenen Eingang niedrig. Keine bewusste
 Unterbrechung der Masse; kein Kabelabziehen unter Spannung.
 
 ## T4 — Laufender Signalverlust und Wiederfreigabe
+
+Status 2026-10-18: **OFFEN**, auf Besitzerwunsch ohne eingebauten Schalter
+ausgelassen. T3 und der T6-Gierverlust durch den herausgefallenen Stecker
+ersetzen den kontrollierten Verlust-/Wiederfreigabetest nicht.
 
 **Dafuer vorher spannungsfrei einen passenden einfachen Signalschalter einbauen.**
 Er unterbricht nur den Weg Receiver-Signal -> MCU-Eingang, nicht Versorgung,
@@ -163,9 +183,15 @@ import bench_test
 bench_test.run('pitch-range')
 ```
 
-Nur dieser Aufruf setzt die absolute Nickgrenze im RAM auf 20 Grad. Zuerst
-STABILIZE bei waagerechtem Modell abwarten. Dann die Nase langsam um etwa
-25–35 Grad anheben, bis `PITCH_RANGE` / MANUAL_FALLBACK erscheint. Wenn kein
+Nur dieser Aufruf setzt die absolute Nickgrenze im RAM auf 20 Grad. Vor einer
+Wiederholung die Startlage relativ zur gespeicherten Referenz beurteilen:
+absolut = pitch_down + calibration.level.pitch. Die aktuelle Referenz ist
+13.889891 Grad; +20 liegt damit schon bei pitch_down=+6.11, -20 bei -33.89 Grad.
+Keine automatische Neukalibrierung oder Vorzeichenumkehr daraus ableiten.
+Zuerst STABILIZE in sicherer Ausgangslage innerhalb der Grenze abwarten.
+Dann vorsichtig schrittweise neigen, bis `PITCH_RANGE` / MANUAL_FALLBACK erscheint;
+bei Nase hoch wird die Anzeige negativer. Nicht nach einer pauschalen
+25-Grad-Bewegung das Ausbleiben eines Faults behaupten. Wenn kein
 sicheres Neigen moeglich ist oder STABILIZE am Anfang nicht erreicht wird, stoppen
 und T6 OFFEN notieren. Nicht auf 90 Grad drehen oder den Sensor abziehen.
 Die Grenze gilt fuer absoluten Sensor-Nick; pitch_down ist relativ zur
@@ -198,7 +224,9 @@ UNVOLLSTAENDIG bedeutet klaeren, nicht durch Neustarts uebergehen. Alte v0.2.2-L
 haben diese Diagnosespalten nicht und reichen fuer diese Auswertung nicht.
 
 Zurueckmelden: ausgefuelltes Protokoll, Ausgabe des Auswerters und pro Lauf beide
-Dateien. Rohlogs bleiben unter logs/ ausserhalb Git. Danach entscheiden wir anhand
+Dateien. Laufende Rohlogs bleiben unter logs/ ausserhalb Git; ausgewaehlte
+unveraenderte Nachweispaare werden mit Auswertung unter docs/testdaten/ versioniert.
+Danach entscheiden wir anhand
 der Befunde ueber Timing/Empfaenger-Failsafe und den unabhaengigen Rueckweg.
 Sender-Aus ist ein eigener Empfaengertest: laufend erzeugte Hold-/Failsafe-Pulse
 werden vom Controller weiterhin als frische Eingaben gesehen.

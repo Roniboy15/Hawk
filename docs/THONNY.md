@@ -1,6 +1,10 @@
 # Thonny: Sicherung, Upload, Kalibrierung und Achsentests
 
 **Aktueller v0.2.3-Schritt:** [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
+Die [Auswertung T1/T2](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md)
+enthaelt einen ersten T1-Sensorfehler, eine bestandene T1-Wiederholung und einen
+USB-Stromverlustbefund. Korrigierte Stopfolge verwenden, als naechstes T3 MANUAL;
+vor weiterer Stabilisierung Sensorbefund/Timing klaeren.
 Alle 15 Firmwaremodule hochladen, vorhandene calibration.json erhalten. Danach
 die dortigen bench_test.run(...)-Aufrufe am Shell-Prompt verwenden. Kein Import-
 Autostart; Testmodi liegen nur im RAM. Die folgenden Abschnitte bleiben als
@@ -137,6 +141,10 @@ es einen expliziten Befehl/Modus, bevor wir Werte im Flug speichern.
 
 Loggt 10 Hz plus Zustandswechsel in einen RAM-Ring (200 Eintraege, etwa bis 20 Sekunden).
 Ctrl+C stoppt zuerst PWM/PIO und schreibt danach bench_<ticks>.csv auf Flash.
+Nach beiden Speichermeldungen zuerst BEC-/Receiver-/Servoversorgung ausschalten,
+USB angeschlossen lassen und Dateien in Ansicht -> Dateien per Kontextmenue
+herunterladen. Erst danach USB trennen. Nicht zum Aktualisieren der Dateiliste
+USB im laufenden Test abziehen; das ist ein MCU-Stromausfall, kein Programmstop.
 v0.2.3 schreibt auch bench_<ticks>.json mit Statistik/Runtime/Konfiguration/
 Kalibrierwerten. **Beide Dateien** zusammen herunterladen; Maxima gelten fuer
 jede abgeschlossene Iteration, auch wenn alte CSV-Zeilen ueberschrieben sind.

@@ -79,11 +79,59 @@ die zweite Vorzeichenstufe ab. Regler-/Filteralgorithmen und Gains sind unveraen
   fehlende Felder/JSON, NaN, unvollstaendige Zeitstatistik und verlorene Ereignisse
   als PASS ab. CLI-Dateipaar und JSON-Roundtrip geprueft.
 
-Keiner dieser Tests greift auf reale PIO/PWM/I2C zu. Physische v0.2.3-Pruefungen
-stehen aus. Die **konkreten naechsten Tests T1–T6** stehen in
+Keiner dieser Hosttests greift auf reale PIO/PWM/I2C zu. Neu eingegangene physische
+T1-/T2-/T3-/T5-/T6-Ergebnisse sind unten getrennt erfasst. Die **Testanleitung T1–T6** steht in
 [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md), Vorlage:
 [TESTPROTOKOLL_FEHLER.md](TESTPROTOKOLL_FEHLER.md). Sensor-/Zeitfehler bleiben
 hier hostsimuliert; T6 prueft physisch nur den echten Winkelgrenz-Fault.
+
+## Physische T1-/T2-Berichte, Eingang 2026-10-18
+
+Die bereitgestellten JSON/CSV-Daten bestaetigen T2-Neutralfreigabe: nach
+WAIT_NEUTRAL erst mit 25 gemeinsamen Neutralframes MANUAL/PWM. Erster T1:
+SENSOR ohne PWM, aber IMU_RUNTIME bei 51.228 s, somit als Gesamtlauf FAIL.
+Die nachgereichte T1-Wiederholung laeuft ca. 58 s ohne Fault/PWM und besteht
+das Softwareprotokoll. Der erste Fehler bleibt ohne Exceptiontext ungeklärt.
+Die ersten T1-Rohdateien wurden durch die Wiederholung ersetzt; Erstbefunde
+und getrennte Fingerprints sowie Archivkopien der aktuellen Laeufe stehen in der
+[Auswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
+
+Kein harter Timingtrip, aber work-Maxima ca. 29–30 ms und wiederholte
+10-ms-Ueberschreitungen: 100 Hz noch nicht durchgaengig qualifiziert. Runtime
+und geladene Kalibrierung sind jetzt in den JSON-Dateien dokumentiert; konkrete
+MCU-Quelldateien, GPIO-Signalformen und elektrische Reserve bleiben offen.
+
+Besitzer bestaetigt extremen Ruderausschlag nur beim USB-Abziehen ohne Ctrl+C,
+bei weiter versorgtem BEC/Receiver/Servos und erhaltener gemeinsamer Masse.
+Korrekter Stop war unauffaellig. Das Ereignis ist keine widerlegte Software-
+Pulsgrenze, sondern ein offener Systembefund bei MCU-Stromverlust; genaue
+Signalursache ist ungemessen. Korrigierte Stop-/Downloadfolge in der Anleitung.
+Die spaeter gemeldeten T3/T5/T6 stehen im folgenden Abschnitt. Wiederholungen
+von T6 muessen die absolute Grenze und die aktuelle Levelreferenz beruecksichtigen.
+
+## Physische T3-/T5-/T6-Berichte, Eingang 2026-10-18
+
+Der Besitzer meldet alle drei Tests wie geplant funktional bestanden; **T4 bleibt
+auf seinen Wunsch OFFEN**, weil kein Signalschalter eingebaut wurde. Die Rohdaten
+bestaetigen T3 fuer jeden fehlenden Startkanal: die anderen Kanaele liefern neue
+Pulse, RX_TIMEOUT bleibt aktiv, alle drei Ausgaenge ohne PWM. T5 bleibt nach
+Neutralfreigabe ca. 95 s ohne Fault in STABILIZE. Nur ein T5-Laufpaar liegt vor.
+
+T5 verfehlt das 100-Hz-Ziel: mittlerer Startabstand 13.347 ms (74.92 Hz),
+work-Mittel 12.605 ms, Maximum 32.323 ms, 7132/7172 Iterationen ueber 10 ms.
+Keine harte 50-ms-Ueberschreitung. Funktion bestanden, Timing weiter offen.
+
+T6 verriegelt PITCH_RANGE bei 15.696 s nach zuvor aktivem STABILIZE und geht
+in MANUAL_FALLBACK. Ab 49.402 s folgt zeitweiser Gier-Pulsverlust; zuletzt
+RX_TIMEOUT bis zum Stop. Alle Ausgaenge dann Trimneutral, kein erneutes
+STABILIZE. Nachtrag des Besitzers: ein Stecker war herausgefallen. Das ist die
+vom Besitzer bestaetigte Ursache, passend zum protokollierten Gier-Pulsverlust;
+kein weiter ungeklaerter Empfangsfehler. Verbindung vor Wiederholungen sichern.
+Die zusaetzliche Folge ersetzt nicht den vorbereiteten T4-Verlust-/Wiederfreigabetest.
+Auswertung, Originalpaare und Fingerprints:
+[T3/T5/T6](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md).
+Naechster Codeumfang: getrennte Laufzeit-/RX-Diagnose und persistente Faultdetails;
+Reglerwerte bleiben unveraendert. Erster T1-IMU_RUNTIME bleibt ungeklärt.
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 
@@ -160,8 +208,8 @@ keine Erlaubnis, einen Netzfehler absichtlich zu reproduzieren.
 - PIO-Neustart/FIFO-Leerung auf dem Board, insbesondere bei anliegender High-Phase.
 - Garantierte Reaktionszeit bei permanentem Bus-/CPU-Haenger oder fehlerhafter
   PWM-Abschaltung; unabhaengiger Hardware-Bypass fehlt.
-- Archiv der konkreten MCU-Dateien/Runtime/Kalibrierung und physischen Pinpfade;
-  Konsolensamples und Richtungsbestaetigungen ersetzen diese Erfassung nicht.
+- Archiv der konkreten MCU-Quelldateien und Nachweis der physischen Pinpfade;
+  Runtime-/Kalibrierungssnapshots sind inzwischen in den v0.2.3-JSONs enthalten.
 - Anti-Windup bei Servo-Trim plus nonzero rate_i bleibt offen. Fuer Tischtests rate_i=0.
 
 Ein bestandener Hosttest ist kein Flugtest. Nach Hardware-/Polungsaenderungen

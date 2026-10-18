@@ -10,18 +10,18 @@
   ```
 
 - [ ] Prüfen: Auf welchem Branch bin ich? Gibt es uncommittete Änderungen?
-- [ ] Bei einem **neuen Entwicklungsschritt** vom passenden, committeden
-  Abschlussstand abzweigen. Fuer den jetzigen Folgeschritt ist das der neue
-  Commit auf `codex/receiver-timing-hardening`, nicht die aeltere main:
+- [ ] Bei einem **neuen Entwicklungsschritt** erst Ergebnisse auf
+  `codex/bench-fault-validation` committen. Dann vom neuen Ergebniscommit
+  fuer Laufzeit-/Fehlerdiagnose abzweigen, nicht von der aelteren main:
 
   ```bash
-  git switch -c codex/bench-fault-validation
+  git switch -c codex/timing-fault-diagnostics
   ```
 
 - [ ] Bei einem **laufenden Schritt** auf dessen Branch wechseln:
 
   ```bash
-  git switch codex/receiver-timing-hardening
+  git switch codex/bench-fault-validation
   ```
 
   Vor einem Branchwechsel offene Änderungen bewusst sichern.
@@ -79,10 +79,13 @@
 - [ ] Sender einschalten und richtige Einstellungen prüfen.
 - [ ] BEC/Batterie anschließen; MCU-Versorgung wie geplant herstellen.
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.
-- [ ] Roll/Nick/Gier-Funktionstests laut Besitzer abgeschlossen;
-  [Testbericht](TESTBERICHT_2026-10-13.md) sichern. Weiter mit
-  [konkreten Fehler-/Timingtests T1–T6](FEHLER_TISCHTEST.md) und
-  [Protokoll](TESTPROTOKOLL_FEHLER.md). Fuer Wiederholungschecks
+- [ ] Aktuellen [Teststand T3/T5/T6](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md)
+  beachten: Funktionen bestaetigt, T4 bewusst offen, Timing noch zu klaeren.
+  Der T6-Stecker fiel laut Besitzer heraus; Verbindung vor Wiederholungen sichern.
+  [Naechste Schritte](NAECHSTE_SCHRITTE.md) vor weiteren
+  Aktuatortests bearbeiten. Fuer geplante Wiederholungen gelten
+  [Fehler-/Timingtests T1–T6](FEHLER_TISCHTEST.md) und
+  [Protokoll](TESTPROTOKOLL_FEHLER.md). Fuer Richtungschecks
   [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
   [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md) verwenden.
 - [ ] Neue Achse erst SENSOR/MANUAL pruefen, dann DIRECTION_CHECKED_AXES erweitern.
@@ -100,12 +103,14 @@
 - [ ] Mit **Ctrl+C** stoppen.
 - [ ] Auf **„PWM/PIO ausgeschaltet“** und die Log-Speicherung warten.
 - [ ] Bei **„Abschalten unvollstaendig“** Versorgung trennen und Fehler klaeren;
-  in diesem Fall wird kein Log exportiert.
+  zuerst BEC-/Servoversorgung, dann USB; in diesem Fall wird kein Log exportiert.
+- [ ] Nach erfolgreichem Stop/Speichern zuerst **BEC-/Receiver-/Servoversorgung
+  ausschalten**, USB zum Download angeschlossen lassen.
 - [ ] Benötigte `bench_…csv`-Dateien auf den Mac herunterladen.
 - [ ] Ab v0.2.3 den passenden `bench_…json`-Laufbericht ebenfalls sichern;
   mit tools/analyze_bench.py und dem passenden Testprofil auswerten.
-- [ ] **Batterie vom BEC trennen.**
-- [ ] USB trennen, wenn du fertig bist oder umstecken möchtest.
+- [ ] **Batterie vom BEC getrennt lassen.**
+- [ ] USB erst nach dem Download trennen, wenn du fertig bist oder umstecken möchtest.
 - [ ] Sender ausschalten.
 - [ ] Alte MCU-Logs erst nach Sicherung löschen, damit der Flash nicht voll wird.
 

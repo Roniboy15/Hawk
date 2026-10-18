@@ -17,6 +17,16 @@ Unterbrechung und die Versorgungsreserve nicht. Die folgenden Hinweise bleiben g
 
 ## Beste Diagnose mit diesen Angaben
 
+Neuer, davon getrennter Befund 2026-10-18: Ausschlag beim USB-Abziehen ohne
+Ctrl+C, BEC/Receiver/Servos weiter versorgt, gemeinsame Masse laut Besitzer
+erhalten. Bei korrektem Stop nicht beobachtet. Das ist kein Nachweis zur Ursache
+der frueheren Raum-/Steckdosenunterbrechung. Details und Logbefunde:
+[Auswertung T1/T2](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
+Verlust des MCU-Signals/Versorgungsuebergang ist eine Arbeitshypothese; die
+elektrische Signalform wurde nicht gemessen. Fehlende Pulse sind kein
+1500-us-Neutralbefehl; Servoreaktion ist modellabhaengig
+([Pololu](https://www.pololu.com/blog/17/servo-control-interface-in-detail)).
+
 1. **Raum-/Steckdosenversorgung:** Eine kurze Unterbrechung der Versorgung
    bzw. einer gemeinsamen Anschlussstelle passt am besten zum berichteten
    Ausfall mehrerer netzversorgter Geraete und selbsttaetiger Rueckkehr. Das ist
@@ -43,6 +53,11 @@ Siehe [Pololu: Servostrom und Versorgung](https://www.pololu.com/blog/16/electri
 
 ## Warnhinweise fuer die naechsten Tests
 
+- USB nicht zum Beenden des Tests abziehen. Ctrl+C, beide Exportmeldungen,
+  danach zuerst BEC-/Receiver-/Servoversorgung aus. USB zum Thonny-Download
+  angeschlossen lassen und zuletzt trennen. Bei unvollstaendiger Abschaltung
+  zuerst Servoversorgung trennen. Korrekte Bedienfolge ist keine Absicherung
+  gegen einen unerwarteten MCU-Stromausfall.
 - Alle Quellen trennen, bevor Signalleitungen umgesteckt werden. Nur ein Ausgang
   darf einen Servosignal-Draht treiben: Receiver ODER MCU. Keine parallelen Signalausgaenge.
 - MCU ueber USB, Servo-Plus ueber passenden BEC, gemeinsame GND. Kein BEC-Plus

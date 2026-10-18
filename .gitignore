@@ -4,5 +4,10 @@ __pycache__/
 logs/
 bench_*.csv
 bench_*.json
+# Reviewed bench evidence; other automatically generated logs stay ignored.
+!docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.csv
+!docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.json
+!docs/testdaten/Tischtests_v0.2.3-bench/T6/bench_292509.csv
+!docs/testdaten/Tischtests_v0.2.3-bench/T6/bench_292509.json
 .venv/
 .thonny/

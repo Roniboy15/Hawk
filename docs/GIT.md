@@ -1,8 +1,12 @@
 # Git auf dem Mac: einmal einrichten, danach kleine Aenderungen sichern
 
-Das Paket enthaelt den Code und repository.bundle mit dem vorbereiteten
-lokalen Git-Repository/Startcommit. Kein GitHub-Repository wurde angelegt oder
-veroeffentlicht. Ein lokales Repo funktioniert ohne Konto und ohne Internet.
+Die einmalige Einrichtung unten beschreibt das urspruengliche Paket; im
+vorhandenen Repository nicht erneut klonen oder origin entfernen. Aktuelle Arbeit:
+codex/bench-fault-validation, Remote-Tracking vorhanden, Details im Abschlussstand.
+
+Das urspruengliche Paket enthaelt den Code und repository.bundle mit dem vorbereiteten
+lokalen Git-Repository/Startcommit. Damals wurde kein GitHub-Repository angelegt
+oder veroeffentlicht. Ein lokales Repo funktioniert ohne Konto und ohne Internet.
 
 ## 1. Git pruefen
 
@@ -64,14 +68,20 @@ Wenn calibration.json noch nicht existiert, erst kalibrieren; nicht eine leere
 Datei erstellen. Beim Umstecken USB und Servo-/BEC-Versorgung trennen.
 Dieser Segler hat kein Triebwerk.
 
-### Aktueller Abschlussstand (2026-10-13)
+### Aktueller Abschlussstand (2026-10-18)
 
-Alle Achsen-Funktionstests sind laut Besitzer bestanden. Die aktuelle Arbeit
-liegt auf `codex/receiver-timing-hardening`; der Besitzer hat den Abschlusscommit
-und Folgebranch am 2026-10-13 freigegeben. Die zusammengehoerigen Konfigurations-/
-Test-/Doc-Aenderungen gemeinsam stagen und committen, dann davon `codex/bench-fault-validation`
-abzweigen. main ist derzeit aelter und enthaelt diese Aenderungen noch nicht.
-Details: [NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md).
+Der Achsenabschluss f66ccd1 und Diagnosecode 4a1f889 sind committed. Aktuelle
+Arbeit liegt auf `codex/bench-fault-validation`; origin zeigt auf denselben
+Quellcommit. Die neuen Tischtestergebnisse und korrigierten Unterlagen sind noch
+nicht committed. T3/T5/T6 funktional bestaetigt, T4 bewusst offen; Timing bleibt
+ein Befund. T6-Gierverlust ist laut Besitzer durch einen herausgefallenen Stecker
+erklaert. Ein Ergebniscommit muss keine Flugfreigabe behaupten.
+
+Empfehlung: diese Unterlagen mit ausgewaehlten Rohdaten jetzt gemeinsam committen,
+dann fuer den neuen Codeumfang `codex/timing-fault-diagnostics` **vom neuen
+Ergebniscommit** abzweigen. main ist aelter und bleibt zunaechst unveraendert.
+Ein Commit braucht keinen weiteren Servotest, da hier keine Firmware geaendert
+wurde. Befehle und Abnahme: [NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md).
 
 Staging ist die Auswahl des naechsten Commitinhalts: `git add` erfasst auch
 Aenderungen an bestehenden Dateien und Loeschungen. `git diff --staged` zeigt

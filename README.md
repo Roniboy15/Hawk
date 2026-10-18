@@ -22,12 +22,20 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 **Aktueller Schritt:** [FEHLER_TISCHTEST.md](docs/FEHLER_TISCHTEST.md) gibt die
 konkreten T1–T6-Ablaeufe und Thonny-Aufrufe vor. Mit
 [TESTPROTOKOLL_FEHLER.md](docs/TESTPROTOKOLL_FEHLER.md) Ergebnisse erfassen.
-Die neue Diagnose ist hostgeprueft; physische v0.2.3-Tests stehen noch aus.
+T1-Wiederholung, T2 und T3 sind funktional bestaetigt. T5/T6 liefen laut Besitzer
+wie erwartet; die Daten bestaetigen Stabilisierung und PITCH_RANGE-Verriegelung.
+T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
+herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
+T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
+Stromverlust bleiben offen. Naechster Codeumfang: Laufzeiten aufschluesseln und
+Faultdetails sichern.
+[Aktuelle Auswertung](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md),
+[Vorgaengerbefunde T1/T2](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
 
 1. [TESTBERICHT_2026-10-13.md](docs/TESTBERICHT_2026-10-13.md): abgeschlossener
    Achsen-Funktionstest, Logauswertung und Grenzen des Nachweises.
-2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): naechster Branch fuer
-   reproduzierbare Fehler-/Timingpruefung, danach Rueckfallebene und Simulation.
+2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): konkreter Diagnoseumfang,
+   Abnahmekriterien und Git-Abschluss; danach Rueckfallebene und Simulation.
 3. [THONNY.md](docs/THONNY.md): Dateien hochladen, kalibrieren, Achsentests wiederholen.
 4. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
 5. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
