@@ -28,9 +28,18 @@ independently prove actual pin wiring, mechanical effect or error recovery.
 Basic direction/function acceptance is owner-reported; power, timing and fault
 qualification remain open. See docs/TESTBERICHT_2026-10-13.md for evidence.
 The owner approved this completion commit and the next branch on 2026-10-13.
-The next branch is
-`codex/bench-fault-validation`, starting from this completed step's commit;
+Current branch: `codex/bench-fault-validation`, starting from the completed
+step's commit f66ccd1;
 do not branch from an older main or treat a bench commit as a flight release.
+
+v0.2.3 adds bounded per-iteration timing aggregates, a transition ring and CSV/JSON
+reports exported only after confirmed shutdown. Physical acceptance is pending;
+follow docs/FEHLER_TISCHTEST.md and record results in its protocol template.
+bench_test.run(profile) is an explicit operator entry, never an automatic launcher.
+Its pitch-range profile temporarily sets the real pitch boundary to 20 degrees;
+it restores RAM configuration on return and does not inject an I2C or timing fault.
+tools/analyze_bench.py runs on the host, not the MCU. A software-protocol PASS
+does not validate electrical signals, servo mechanics or an independent fallback.
 
 ## Working boundaries
 

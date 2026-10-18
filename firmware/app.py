@@ -11,8 +11,11 @@ und verlangt neue Neutralframes vor dem manuellen Ersatz. Deadline nach Read
 und vor Ausgabe pruefen; ein dauerhaft blockierter Bus bleibt ungelöst.
 Diese Software ist kein unabh. Bypass: haengende CPU/I2C wird nicht geloest.
 Logs bleiben im RAM; erst nach dem Abschalten der PWM wird CSV geschrieben.
+v0.2.3 sammelt Laufzeitmaxima jeder Iteration und begrenzte Zustandswechsel;
+CSV/JSON werden gemeinsam nach Stop exportiert. Keine Fehler-Injektion im App-Start.
 """
 import math
+import sys
 import time
 import config as cfg
 from calibration import load, check_orientation
@@ -22,6 +25,7 @@ from receiver import Receiver, normalize
 from control import AxisController, Gate, select_mode
 from outputs import Outputs
 from logger import RingLog
+from diagnostics import BenchDiagnostics, rx_snapshot
 
 
 def _number(name, value, low=None, high=None, integer=False):
@@ -66,6 +70,7 @@ def validate_config():
     if cfg.NEUTRAL_WINDOW >= 1:
         raise ValueError('NEUTRAL_WINDOW muss kleiner 1 sein')
     _number('LOG_CAPACITY', cfg.LOG_CAPACITY, 1, integer=True)
+    _number('EVENT_CAPACITY', cfg.EVENT_CAPACITY, 1, 256, integer=True)
     for name in ('LOG_HZ', 'CONSOLE_HZ'):
         value = getattr(cfg, name)
         _number(name, value, 0, min(1000, 1000000/cfg.LOOP_US))
@@ -120,6 +125,30 @@ def deadline_missed(start):
     return elapsed < 0 or elapsed > cfg.MAX_LOOP_US
 
 
+def run_metadata(data):
+    """Verwendete Einstellungen/Runtime sichern, ohne Geraetekalibrierung zu aendern."""
+    return {
+        'summary_schema': 1, 'csv_schema': 2, 'version': cfg.VERSION,
+        'runtime': {'implementation': sys.implementation.name, 'version': sys.version,
+                    'machine': getattr(sys.implementation, '_machine', '')},
+        'configuration': {
+            'requested_mode': cfg.START_MODE, 'auto_start': cfg.AUTO_START,
+            'active_axes': list(cfg.ACTIVE_AXES),
+            'direction_checked_axes': list(cfg.DIRECTION_CHECKED_AXES),
+            'loop_us': cfg.LOOP_US, 'max_loop_us': cfg.MAX_LOOP_US,
+            'rx_timeout_ms': cfg.RX_TIMEOUT_MS, 'neutral_frames': cfg.NEUTRAL_FRAMES,
+            'neutral_window': cfg.NEUTRAL_WINDOW,
+            'log_hz': cfg.LOG_HZ, 'console_hz': cfg.CONSOLE_HZ,
+            'log_capacity': cfg.LOG_CAPACITY, 'event_capacity': cfg.EVENT_CAPACITY,
+            'gyro_std_max': cfg.GYRO_STD_MAX, 'attitude_accel_gain': cfg.ATTITUDE_ACCEL_GAIN,
+            'pitch_control_limit_deg': cfg.PITCH_CONTROL_LIMIT_DEG,
+            'sensor': cfg.SENSOR, 'flight_attitude_trim': cfg.FLIGHT_ATTITUDE_TRIM,
+            'receiver': {a: cfg.RECEIVER[a] for a in cfg.ACTIVE_AXES},
+            'servos': {a: cfg.SERVOS[a] for a in cfg.ACTIVE_AXES},
+            'controllers': {a: cfg.CONTROLLERS[a] for a in cfg.ACTIVE_AXES}},
+        'calibration': data}
+
+
 def run():
     validate_config()
     data = load(cfg.CALIBRATION_FILE)
@@ -135,6 +164,8 @@ def run():
             raise RuntimeError('Zuerst calibrate_level.py ausfuehren')
     receiver, outputs, imu = None, None, None
     log = RingLog(cfg.LOG_CAPACITY)
+    diagnostics = BenchDiagnostics(cfg.LOOP_US, cfg.MAX_LOOP_US, cfg.EVENT_CAPACITY)
+    metadata = run_metadata(data)
     fault = ''
     pose = Attitude(cfg.ATTITUDE_ACCEL_GAIN)
     controllers = {axis: AxisController(cfg.CONTROLLERS[axis], cfg.SERVOS[axis]['limit'])
@@ -145,6 +176,7 @@ def run():
     angles = (0, 0, 0)
     construction_complete = True
     stopped = False
+    in_iteration = False
     try:
         try:
             imu = IMU(cfg.SENSOR, cfg.ALLOW_ID72_BENCH)
@@ -175,10 +207,15 @@ def run():
         started = time.ticks_ms()
         print_time, log_time = started, started
         last_mode = None
+        first_iteration = True
         while True:
             start = time.ticks_us()
+            in_iteration = True
             elapsed_us = time.ticks_diff(start, previous)
             previous = start
+            # Erste Differenz ist nur Startvorbereitung, kein ganzer Loopabstand.
+            measured_period = None if first_iteration else elapsed_us
+            first_iteration = False
             dt = max(elapsed_us, 1)/1000000
             timing_failed = elapsed_us < 0 or elapsed_us > cfg.MAX_LOOP_US
             sensor_error = None
@@ -270,35 +307,66 @@ def run():
             # PWM-Initialisierung koennen Zeit verbrauchen. Frische Freigabe
             # verwerfen, wenn eine Zeitueberschreitung erkannt wurde.
             if not timing_failed and deadline_missed(start):
+                timing_failed = True
                 if not fault:
                     fault = 'TIMING'
                 receiver.invalidate(time.ticks_ms())
                 gate.update(False, [], False)
+                fresh = False
                 for controller in controllers.values():
                     controller.reset()
                 offsets = {}
                 mode = select_mode(cfg.START_MODE, False, False, fault, reference_ok)
+            # Diagnose erst nach der letzten Sicherheitsschranke bzw. Ausgabe
+            # sammeln. Keine Strings/Dateizugriffe zwischen Freigabe und PWM.
+            output_start = time.ticks_us()
+            pre_output_us = time.ticks_diff(output_start, start) if outputs is not None else None
             pulses = outputs.write(offsets) if outputs is not None else {}
+            write_us = time.ticks_diff(time.ticks_us(), output_start) if outputs is not None else None
+            # RX-Alter bezieht sich auf den Entscheidungszeitpunkt `now`, nicht
+            # auf eine vermeintlich neue Hardware-Capture-Zeit bei der Ausgabe.
+            rx_state = rx_snapshot(receiver.channels, cfg.ACTIVE_AXES, now, time.ticks_diff)
+            transition = diagnostics.transition(time.ticks_diff(now, started), mode, fault,
+                                                 outputs is not None, gate.armed, gate.count,
+                                                 fresh, rx_state, pulses)
             # Konsolenausgabe erst nach dem begrenzten Aktuatorkommando.
             if sensor_error is not None:
                 print('Automatik aus:', sensor_error)
             if mode != last_mode:
-                print('Zustand:', mode, 'Fehler:', fault or '-')
+                print('Zustand:', mode, 'Fehler:', fault or '-',
+                      't=%d ms' % time.ticks_diff(now, started))
                 last_mode = mode
+            elif transition:
+                print('Fehlerwechsel:', fault or '-', 't=%d ms' % time.ticks_diff(now, started))
             if time.ticks_diff(now, print_time) >= int(1000/cfg.CONSOLE_HZ):
                 rx = {a: receiver.channels[a]['pulse'] for a in cfg.ACTIVE_AXES}
                 print('roll=%.1f pitch_down=%.1f soll=(%.1f,%.1f) gyro=(%.1f,%.1f,%.1f) yaw_rate_left=%.1f rx=%s servo=%s %s %s' %
                       (roll, pitch, target_roll, target_pitch, sample[3], sample[4], sample[5],
                        target_yaw_rate, rx, pulses, mode, fault))
                 print_time = now
-            if time.ticks_diff(now, log_time) >= int(1000/cfg.LOG_HZ):
-                row = '%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%s\n' % (
+            # Auch kurze Zustands-/Fault-Wechsel loggen, die zwischen 10-Hz-
+            # Samples liegen. Ringgroesse bleibt fest; JSON bewahrt Laufmaxima.
+            if transition or time.ticks_diff(now, log_time) >= int(1000/cfg.LOG_HZ):
+                row = '%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%s' % (
                     time.ticks_diff(now, started), mode, roll, pitch, angles[2],
                     target_roll, target_pitch, pulses.get('roll', 0), pulses.get('pitch', 0),
                     pulses.get('yaw', 0), dt*1000, sample[3], sample[4], sample[5],
                     target_yaw_rate, fault)
+                row += ',%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d\n' % (
+                    pre_output_us if pre_output_us is not None else -1,
+                    write_us if write_us is not None else -1,
+                    rx_state[0][0], rx_state[0][1], rx_state[0][2],
+                    rx_state[1][0], rx_state[1][1], rx_state[1][2],
+                    rx_state[2][0], rx_state[2][1], rx_state[2][2],
+                    gate.count, int(gate.armed), int(fresh))
                 log.append(row)
                 log_time = now
+            # Work umfasst Sensor/Regler/PWM/Konsole/CSV-Formatierung bis hier.
+            # Dieser Counter-Update und sleep sind nicht enthalten; der naechste
+            # gemessene Startabstand umfasst dagegen die ganze vorige Iteration.
+            work_us = time.ticks_diff(time.ticks_us(), start)
+            diagnostics.finish(measured_period, pre_output_us, write_us, work_us, timing_failed)
+            in_iteration = False
             remaining = cfg.LOOP_US-time.ticks_diff(time.ticks_us(), start)
             if remaining > 0:
                 time.sleep_us(remaining)
@@ -329,6 +397,14 @@ def run():
             print('PIO-Abschalten fehlgeschlagen:', receiver_error)
         if shutdown_ok:
             print('PWM/PIO ausgeschaltet')
+            stats = diagnostics.report()
+            print('Timing: Iterationen=%d TIMING-Erkennungen=%d' %
+                  (stats['iterations'], stats['timing_trips']))
+            for name in ('period', 'pre_output', 'write', 'work'):
+                value = stats['timing'][name]
+                print('  %s: max_us=%s ueber_Sollperiode=%d ueber_Deadline=%d ungueltig=%d' %
+                      (name, str(value['max_us']), value['over_period'],
+                       value['over_deadline'], value['invalid']))
         else:
             # Kein Flashzugriff, wenn die Aktuatorabschaltung unbestaetigt ist.
             print('Abschalten unvollstaendig; kein Logexport. Versorgung trennen.')
@@ -338,6 +414,12 @@ def run():
             path = 'bench_%d.csv' % stamp
             try:
                 log.save(path)
+                metadata.update(csv_file=path, shutdown_ok=True,
+                                stop_reason='keyboard_interrupt' if stopped else 'exception',
+                                csv_rows_total=log.total, csv_rows_retained=log.count,
+                                partial_iteration_on_stop=in_iteration)
+                diagnostics.save('bench_%d.json' % stamp, metadata)
                 print('RAM-Log gespeichert:', path)
+                print('Laufbericht gespeichert: bench_%d.json' % stamp)
             except OSError as error:
                 print('Log konnte nicht gespeichert werden:', error)

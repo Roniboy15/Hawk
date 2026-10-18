@@ -81,7 +81,8 @@
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.
 - [ ] Roll/Nick/Gier-Funktionstests laut Besitzer abgeschlossen;
   [Testbericht](TESTBERICHT_2026-10-13.md) sichern. Weiter mit
-  [Fehler-/Timingqualifikation](NAECHSTE_SCHRITTE.md). Fuer Wiederholungschecks
+  [konkreten Fehler-/Timingtests T1–T6](FEHLER_TISCHTEST.md) und
+  [Protokoll](TESTPROTOKOLL_FEHLER.md). Fuer Wiederholungschecks
   [PITCH_YAW_TISCHTEST.md](PITCH_YAW_TISCHTEST.md) und
   [VERSORGUNG_WARNHINWEISE.md](VERSORGUNG_WARNHINWEISE.md) verwenden.
 - [ ] Neue Achse erst SENSOR/MANUAL pruefen, dann DIRECTION_CHECKED_AXES erweitern.
@@ -101,6 +102,8 @@
 - [ ] Bei **„Abschalten unvollstaendig“** Versorgung trennen und Fehler klaeren;
   in diesem Fall wird kein Log exportiert.
 - [ ] Benötigte `bench_…csv`-Dateien auf den Mac herunterladen.
+- [ ] Ab v0.2.3 den passenden `bench_…json`-Laufbericht ebenfalls sichern;
+  mit tools/analyze_bench.py und dem passenden Testprofil auswerten.
 - [ ] **Batterie vom BEC trennen.**
 - [ ] USB trennen, wenn du fertig bist oder umstecken möchtest.
 - [ ] Sender ausschalten.

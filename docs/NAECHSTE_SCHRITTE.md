@@ -16,15 +16,18 @@ oder hoehere Gains wuerden die noch offenen Fehler-/Versorgungsfragen nicht klae
    bleibt zunaechst unveraendert; nicht von dessen aelterem Stand abzweigen.
    Keine automatische Veroeffentlichung, kein MCU-Upload, kein Flug-Release-Tag.
 
-Der Besitzer hat Abschlusscommit und Folgebranch am 2026-10-13 freigegeben.
-Die Implementierung und Hardwaretests des Folgeschritts stehen noch aus.
+Abschlusscommit f66ccd1 und Folgebranch sind erstellt. Die Softwarevorbereitung
+ist als v0.2.3 auf codex/bench-fault-validation umgesetzt; Hardwaretests stehen aus.
+Die konkrete Anleitung mit Profilaufrufen und PASS-Kriterien ist jetzt
+[FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md), Protokoll:
+[TESTPROTOKOLL_FEHLER.md](TESTPROTOKOLL_FEHLER.md). Mit T1 beginnen.
 Ein spaeterer Merge kann diesen Umfang als Bodenversuchsstand uebernehmen,
 ohne damit elektrische oder Flugqualifikation zu behaupten.
 
 ## Umfang des naechsten kleinen Entwicklungsschritts
 
-**Fehlerreaktionen und reales Timing nachweisen.** Erst Softwareinstrumentierung
-und Hostpruefungen erstellen, dann die beaufsichtigten MCU-Tests getrennt planen.
+**Fehlerreaktionen und reales Timing nachweisen.** Die folgende Software ist
+umgesetzt und hostgeprueft. Physische T1–T6 gemaess konkreter Anleitung ausfuehren.
 
 - Begrenzte RAM-Zeitstatistik fuer jede Iteration: Startabstand, Rechenzeit bis
   zur Ausgabe, gesamte Iteration inklusive Diagnose/Logging und Ueberschreitungen.
@@ -39,7 +42,9 @@ und Hostpruefungen erstellen, dann die beaufsichtigten MCU-Tests getrennt planen
   Verriegelung, tick-Umlauf und Cleanup auf Regressionen pruefen.
 - Kleine Host-Auswertung fuer CSV/Header/Zeiten/Pulsgrenzen und ein Testprotokoll
   mit PASS/FAIL-Kriterien. Keine absichtlichen Stoerungen in Produktionsdefaults;
-  simulierte Fehler bleiben im Hosttest, Hardware-Injektion ein eigener Testaufbau.
+  simulierte Fehler bleiben im Hosttest, reale Signalunterbrechung ein vorbereiteter
+  Signalschalter. Das separate Profil pitch-range nutzt nur voruebergehend eine
+  echte 20-Grad-Nickgrenze und spritzt keinen IMU-/Timingfehler ein.
 
 ## Danach am Tisch zu erfassende Nachweise
 

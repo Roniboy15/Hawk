@@ -29,12 +29,93 @@ import calibration
 import receiver
 import outputs
 import calibrate_rc
+import bench_test
 from attitude import Attitude, quaternion, body_error
 from receiver import normalize
 from outputs import command
 from control import AxisController, Gate, select_mode
 from logger import RingLog
+from diagnostics import BenchDiagnostics, TimingStats, rx_snapshot
 from imu import validate_transform
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/'tools'))
+from analyze_bench import inspect_run, read_csv, main as analyze_main
+
+
+class DiagnosticsTests(unittest.TestCase):
+    def test_timing_extrema_and_counts_include_every_observation(self):
+        stats = TimingStats(10000, 50000)
+        for value in (None, 8000, 11000, 60000, -1):
+            stats.add(value)
+        report = stats.report()
+        self.assertEqual(report['count'], 3)
+        self.assertEqual(report['min_us'], 8000)
+        self.assertEqual(report['max_us'], 60000)
+        self.assertEqual(report['over_period'], 2)
+        self.assertEqual(report['over_deadline'], 1)
+        self.assertEqual(report['invalid'], 1)
+
+    def test_transition_ring_is_bounded_and_retains_fault_only_changes(self):
+        diag = BenchDiagnostics(10000, 50000, 2)
+        rx = ([1500, 0, 0], [10, -1, -1], [1, 0, 0])
+        for mode, fault in (('WAIT_NEUTRAL', ''), ('STABILIZE', ''), ('STABILIZE', 'IMU_RUNTIME')):
+            self.assertTrue(diag.transition(0, mode, fault, True, True, 25, True, rx, {'roll': 1500}))
+            diag.finish(None, 100, 10, 200, False)
+        self.assertFalse(diag.transition(0, 'STABILIZE', 'IMU_RUNTIME', True, True, 25, True, rx, {'roll': 1500}))
+        report = diag.report()
+        self.assertEqual(len(report['events']), 2)
+        self.assertEqual(report['events_dropped'], 1)
+        self.assertEqual(report['events'][-1]['fault'], 'IMU_RUNTIME')
+        self.assertEqual(report['fault_iterations'], {'IMU_RUNTIME': 1})
+        self.assertEqual(report['iterations'], 3)
+
+    def test_rx_snapshot_handles_tick_wrap_absent_channels_and_negative_age(self):
+        channels = {'roll': {'pulse': 1500, 'time': 1010, 'sequence': 5}}
+        diff = lambda a, b: (a-b+512) % 1024-512
+        self.assertEqual(rx_snapshot(channels, ('roll',), 6, diff),
+                         ([1500, 0, 0], [20, -1, -1], [5, 0, 0]))
+        self.assertEqual(rx_snapshot(channels, ('roll',), 1000, diff)[1], [-1, -1, -1])
+
+    def test_json_export_roundtrip(self):
+        import json
+        diag = BenchDiagnostics(10000, 50000, 2)
+        diag.finish(10000, None, None, 200, False)
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(pathlib.Path(directory)/'report.json')
+            diag.save(path, {'version': 'test'})
+            report = json.loads(pathlib.Path(path).read_text())
+        self.assertEqual(report['version'], 'test')
+        self.assertIsNone(report['timing']['pre_output']['max_us'])
+        self.assertEqual(report['timing']['period']['max_us'], 10000)
+
+
+class BenchProfileTests(unittest.TestCase):
+    def test_import_and_invalid_profile_do_not_start_app(self):
+        with patch.object(app, 'run') as run:
+            with self.assertRaises(ValueError):
+                bench_test.run('unknown')
+            run.assert_not_called()
+
+    def test_autostart_configuration_blocks_bench_entry(self):
+        with patch.object(config, 'AUTO_START', True), patch.object(app, 'run') as run:
+            with self.assertRaises(ValueError):
+                bench_test.run('manual')
+            run.assert_not_called()
+
+    def test_test_overrides_are_restored_after_start_error_or_interrupt(self):
+        for error in (OSError('Sensorstart'), KeyboardInterrupt()):
+            def failed_run():
+                self.assertEqual(config.START_MODE, 'stabilize')
+                self.assertEqual(config.PITCH_CONTROL_LIMIT_DEG, 20.0)
+                raise error
+            with self.subTest(error=type(error).__name__), \
+                 patch.object(config, 'START_MODE', 'sensor'), \
+                 patch.object(config, 'PITCH_CONTROL_LIMIT_DEG', 75.0), \
+                 patch.object(app, 'run', side_effect=failed_run), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(type(error)):
+                    bench_test.run('pitch-range')
+                self.assertEqual(config.START_MODE, 'sensor')
+                self.assertEqual(config.PITCH_CONTROL_LIMIT_DEG, 75.0)
 
 
 class ReceiverTests(unittest.TestCase):
@@ -183,6 +264,7 @@ class ConfigurationTests(unittest.TestCase):
                  ('NEUTRAL_FRAMES', 0), ('NEUTRAL_WINDOW', 1),
                  ('LOG_HZ', 0), ('LOG_HZ', float('nan')), ('CONSOLE_HZ', 0),
                  ('LOG_CAPACITY', 0), ('PITCH_CONTROL_LIMIT_DEG', 90)]
+        cases.extend([('EVENT_CAPACITY', 0), ('EVENT_CAPACITY', 257)])
         for name, value in cases:
             with self.subTest(name=name, value=value), patch.object(config, name, value):
                 with self.assertRaises(ValueError):
@@ -458,10 +540,10 @@ class PureTests(unittest.TestCase):
 
 class FlowTests(unittest.TestCase):
     def simulate(self, scenario, axes=('roll',), mode='stabilize', save_log=False,
-                 expected_error=None):
+                 expected_error=None, failed_axis='pitch', log_hz=100):
         recorded = []
         state = {'iteration': 0, 'closed': False, 'write_times': [], 'saved_logs': [],
-                 'pulse_records': [], 'log_rows': []}
+                 'pulse_records': [], 'log_rows': [], 'reports': []}
 
         class Clock:
             value = (1 << 30)-15000 if scenario == 'wrap' else 1000000
@@ -490,9 +572,10 @@ class FlowTests(unittest.TestCase):
                     Clock.value += 60000
                     state['stall_return_us'] = Clock.value
                 gz = 10 if scenario == 'yaw_left' else -10 if scenario == 'yaw_right' else 0
+                gy = 100 if scenario == 'pitch_range' and state['iteration'] >= 4 else 0
                 if scenario == 'yaw_stopped':
                     gz = 50 if state['iteration'] < 5 else 0
-                return tuple(self.calibrate_gyro())+(0, 0, gz)
+                return tuple(self.calibrate_gyro())+(0, gy, gz)
 
         class Controller(AxisController):
             def update(self, *args):
@@ -504,13 +587,22 @@ class FlowTests(unittest.TestCase):
 
         class FakeRX:
             def __init__(self, settings, axes, timeout, **kwargs):
-                self.channels = {a: {'pulse': 1500, 'sequence': 0} for a in axes}
+                self.channels = {a: {'pulse': 1500, 'sequence': 0, 'time': None} for a in axes}
             def poll(self, now):
                 state['iteration'] += 1
                 if state['iteration'] > 10:
                     raise KeyboardInterrupt
-                for c in self.channels.values():
+                for axis, c in self.channels.items():
+                    missing = (scenario == 'missing_channel' or
+                               (scenario in ('channel_loss', 'channel_recovery') and
+                                state['iteration'] >= 4))
+                    if scenario == 'channel_recovery' and state['iteration'] >= 6:
+                        missing = False
+                    if missing and axis == failed_axis:
+                        c['pulse'], c['time'] = None, None
+                        continue
                     c['sequence'] += 1
+                    c['time'] = (now-10) % (1 << 30)
                     c['pulse'] = 1500 if state['iteration'] < 4 else 1800
                     if scenario in ('bank_right', 'bank_left', 'nose_up', 'nose_down', 'yaw_left', 'yaw_right', 'yaw_stopped'):
                         c['pulse'] = 1500
@@ -518,6 +610,10 @@ class FlowTests(unittest.TestCase):
                         c['pulse'] = 1000
                     if scenario in ('stick_low', 'stick_high') and state['iteration'] >= 4:
                         c['pulse'] = 1000 if scenario == 'stick_low' else 2000
+                    if scenario == 'channel_recovery' and 8 <= state['iteration'] <= 9:
+                        c['pulse'] = 1500
+                    if scenario == 'initial_non_neutral':
+                        c['pulse'] = 1800 if state['iteration'] <= 4 else 1500
                     if scenario == 'timing_rearm' and 5 <= state['iteration'] <= 7:
                         c['pulse'] = 1500
                         state['invalid'] = False
@@ -526,13 +622,13 @@ class FlowTests(unittest.TestCase):
                 if scenario == 'receiver_delay' and state['iteration'] == 2:
                     Clock.value += 60000
             def all_fresh(self, now):
-                return not state.get('invalid', False) and not (
+                return all(c['pulse'] is not None for c in self.channels.values()) and not state.get('invalid', False) and not (
                     scenario == 'rx_loss' and state['iteration'] >= 6) and not (
                     scenario == 'missing_pitch' or (scenario == 'pitch_loss' and state['iteration'] >= 6))
             def invalidate(self, now):
                 state['invalid'] = True
                 state['invalidated_at'] = state['iteration']
-                for c in self.channels.values(): c['pulse'] = None
+                for c in self.channels.values(): c['pulse'], c['time'] = None, None
             def close(self): state['rx_closed'] = True
 
         class FakeOut:
@@ -563,7 +659,16 @@ class FlowTests(unittest.TestCase):
             if (scenario == 'startup_console_delay' and args and
                     str(args[0]).startswith('Phase PWM_START_REQUEST')):
                 Clock.value += 60000
+            if (scenario == 'console_delay' and args and str(args[0]).startswith('roll=')
+                    and not state.get('console_delayed')):
+                state['console_delayed'] = True
+                Clock.value += 60000
             original_print(*args, **kwargs)
+        def save_report(report, path, metadata):
+            self.assertTrue(state['rx_closed'])
+            if state.get('out_created'):
+                self.assertTrue(state['closed'])
+            state['reports'].append(dict(metadata, **report.report()))
         with patch.object(app, 'IMU', FakeIMU), patch.object(app, 'Receiver', FakeRX), \
              patch.object(app, 'Outputs', FakeOut), patch.object(app, 'time', Clock), \
              patch.object(app, 'AxisController', Controller), \
@@ -573,10 +678,13 @@ class FlowTests(unittest.TestCase):
              patch.object(config, 'ACTIVE_AXES', axes), \
              patch.object(config, 'DIRECTION_CHECKED_AXES', axes), \
              patch.object(config, 'NEUTRAL_FRAMES', 2), \
-             patch.object(config, 'LOG_HZ', 100), \
+             patch.object(config, 'LOG_HZ', log_hz), \
+             patch.object(config, 'CONSOLE_HZ', 100 if scenario == 'console_delay' else 4), \
+             patch.object(config, 'PITCH_CONTROL_LIMIT_DEG', 2 if scenario == 'pitch_range' else 75), \
              patch.object(config, 'SAVE_LOG_ON_STOP', save_log), \
              patch.object(RingLog, 'save', lambda log, path: (
                  state['saved_logs'].append(path), state['log_rows'].extend(log.ordered()))), \
+             patch.object(BenchDiagnostics, 'save', save_report), \
              contextlib.redirect_stdout(transcript):
             if expected_error is None:
                 app.run()
@@ -661,7 +769,7 @@ class FlowTests(unittest.TestCase):
     def test_tick_wrap_does_not_create_timing_fault(self):
         records, _, text = self.simulate('wrap')
         self.assertGreater(records[-1][1]['roll']*config.RECEIVER['roll']['sign'], 0)
-        self.assertNotIn('TIMING', text)
+        self.assertNotIn('Fehler: TIMING', text)
 
     def test_manual_mode_also_neutralizes_after_late_read(self):
         records, state, _ = self.simulate('timing', mode='manual')
@@ -746,7 +854,7 @@ class FlowTests(unittest.TestCase):
         self.assertLess(text.index('GYRO_DONE'), text.index('PWM_START_REQUEST'))
         self.assertTrue(state['log_rows'])
         count = len(RingLog.HEADER.strip().split(','))
-        self.assertEqual(count, 16)
+        self.assertEqual(count, 30)
         self.assertTrue(all(len(row.strip().split(',')) == count for row in state['log_rows']))
 
     def test_slow_startup_diagnostic_cannot_start_pwm(self):
@@ -770,6 +878,184 @@ class FlowTests(unittest.TestCase):
     def test_yaw_uses_rate_command(self):
         records, _, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'))
         self.assertGreater(records[-1][1]['yaw']*config.RECEIVER['yaw']['sign'], 0)
+
+    def test_each_missing_channel_prevents_all_three_outputs(self):
+        for axis in ('roll', 'pitch', 'yaw'):
+            with self.subTest(axis=axis):
+                records, state, _ = self.simulate('missing_channel', axes=('roll', 'pitch', 'yaw'),
+                                                 save_log=True, failed_axis=axis)
+                self.assertEqual(records, [])
+                self.assertFalse(state.get('out_created', False))
+                self.assertTrue(all(not event['pwm'] for event in state['reports'][0]['events']))
+
+    def test_each_channel_loss_neutralizes_all_three_outputs(self):
+        for axis in ('roll', 'pitch', 'yaw'):
+            with self.subTest(axis=axis):
+                records, state, _ = self.simulate('channel_loss', axes=('roll', 'pitch', 'yaw'),
+                                                 save_log=True, failed_axis=axis)
+                self.assertTrue(all(offsets == {} for iteration, offsets in records if iteration >= 4))
+                self.assertEqual(state['pulse_records'][-1], {'roll': 1500, 'pitch': 1500, 'yaw': 1500})
+
+    def test_each_channel_recovery_waits_for_new_neutral_frames(self):
+        for axis in ('roll', 'pitch', 'yaw'):
+            with self.subTest(axis=axis):
+                records, state, _ = self.simulate('channel_recovery', axes=('roll', 'pitch', 'yaw'),
+                                                 mode='manual', save_log=True, failed_axis=axis)
+                self.assertTrue(all(offsets == {} for iteration, offsets in records if 4 <= iteration <= 8))
+                self.assertTrue(next(offsets for iteration, offsets in records if iteration == 10))
+                modes = [event['mode'] for event in state['reports'][0]['events']]
+                self.assertEqual(modes, ['WAIT_NEUTRAL', 'MANUAL', 'RX_TIMEOUT', 'WAIT_NEUTRAL', 'MANUAL'])
+
+    def test_offcenter_start_does_not_construct_pwm(self):
+        _, state, _ = self.simulate('initial_non_neutral', axes=('roll', 'pitch', 'yaw'),
+                                    mode='manual', save_log=True)
+        self.assertEqual(state['pulse_records'][0], {'roll': 1500, 'pitch': 1500, 'yaw': 1500})
+        self.assertGreaterEqual(state['write_times'][0], 1050000)
+        self.assertFalse(state['reports'][0]['events'][0]['pwm'])
+
+    def test_timing_after_controller_delay_is_counted(self):
+        _, state, _ = self.simulate('controller_delay', save_log=True)
+        self.assertGreater(state['reports'][0]['timing_trips'], 0)
+
+    def test_console_cost_is_measured_and_next_iteration_faults(self):
+        _, state, _ = self.simulate('console_delay', axes=('roll', 'pitch', 'yaw'), save_log=True)
+        report = state['reports'][0]
+        self.assertGreaterEqual(report['timing']['work']['max_us'], 60000)
+        self.assertGreaterEqual(report['timing']['period']['max_us'], 60000)
+        self.assertGreater(report['timing_trips'], 0)
+        self.assertTrue(report['fault_iterations'].get('TIMING', 0))
+
+    def test_summary_is_saved_only_after_confirmed_shutdown(self):
+        _, state, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'), save_log=True)
+        report = state['reports'][0]
+        self.assertTrue(report['shutdown_ok'])
+        self.assertEqual(report['iterations'], 10)
+        self.assertEqual(report['timing']['period']['count'], 9)
+        self.assertEqual(report['configuration']['active_axes'], ['roll', 'pitch', 'yaw'])
+        self.assertEqual(report['calibration']['rc']['yaw']['center'], 1500)
+        for scenario in ('cleanup_error', 'startup_error'):
+            _, failed, _ = self.simulate(scenario, save_log=True,
+                                        expected_error=OSError if scenario == 'startup_error' else None)
+            self.assertEqual(failed['reports'], [])
+
+    def test_fault_and_mode_changes_logged_even_between_periodic_samples(self):
+        _, state, _ = self.simulate('sensor_error', axes=('roll', 'pitch', 'yaw'),
+                                    save_log=True, log_hz=1)
+        events = state['reports'][0]['events']
+        self.assertTrue(any(e['mode'] == 'MANUAL_FALLBACK' and e['fault'] == 'IMU_RUNTIME' for e in events))
+        rows = [dict(zip(RingLog.HEADER.strip().split(','), row.strip().split(',')))
+                for row in state['log_rows']]
+        self.assertTrue(any(row['mode'] == 'MANUAL_FALLBACK' and row['fault'] == 'IMU_RUNTIME' for row in rows))
+        self.assertTrue(all(int(row['ms']) < 1000 for row in rows))
+
+    def test_fresh_held_pulses_remain_indistinguishable_from_radio_link(self):
+        _, state, _ = self.simulate('normal', axes=('roll', 'pitch', 'yaw'), save_log=True)
+        rows = [dict(zip(RingLog.HEADER.strip().split(','), row.strip().split(',')))
+                for row in state['log_rows']]
+        tail = rows[-3:]
+        self.assertTrue(all(row['rx_roll'] == '1800' and row['fresh'] == '1' for row in tail))
+        self.assertLess(int(tail[0]['rx_seq_roll']), int(tail[-1]['rx_seq_roll']))
+        self.assertTrue(all(row['mode'] == 'STABILIZE' for row in tail))
+
+    def test_automation_fault_is_latched_for_all_axes(self):
+        for scenario in ('sensor_error', 'pitch_range', 'timing_rearm'):
+            with self.subTest(scenario=scenario):
+                records, state, _ = self.simulate(scenario, axes=('roll', 'pitch', 'yaw'), save_log=True)
+                self.assertTrue(any(e['mode'] == 'MANUAL_FALLBACK' for e in state['reports'][0]['events']))
+                for axis in ('roll', 'pitch', 'yaw'):
+                    expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000},
+                                         config.RECEIVER[axis]['sign'])*config.SERVOS[axis]['limit']
+                    self.assertAlmostEqual(records[-1][1][axis], expected)
+
+
+class AnalysisTests(unittest.TestCase):
+    def recorded_run(self, scenario='normal', mode='stabilize', failed_axis='pitch'):
+        _, state, _ = FlowTests().simulate(scenario, axes=('roll', 'pitch', 'yaw'), mode=mode,
+                                          save_log=True, failed_axis=failed_axis)
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)/'sample.csv'
+            path.write_text(RingLog.HEADER+''.join(state['log_rows']))
+            rows = read_csv(path)
+        return rows, state['reports'][0]
+
+    def test_sensor_and_normal_stabilize_profiles_pass(self):
+        for mode, profile in (('sensor', 'sensor'), ('stabilize', 'stabilize')):
+            with self.subTest(mode=mode):
+                rows, report = self.recorded_run(mode=mode)
+                result = inspect_run(rows, report, profile)
+                self.assertEqual(result['issues'], [])
+                self.assertTrue(result['verdict'].startswith('PASS'))
+
+    def test_missing_and_recovery_profiles_for_each_axis(self):
+        for axis in ('roll', 'pitch', 'yaw'):
+            for scenario, profile in (('missing_channel', 'missing-rx'), ('channel_recovery', 'rx-recovery')):
+                with self.subTest(axis=axis, scenario=scenario):
+                    rows, report = self.recorded_run(scenario, mode='manual', failed_axis=axis)
+                    self.assertTrue(inspect_run(rows, report, profile)['verdict'].startswith('PASS'))
+
+    def test_initial_non_neutral_profile_requires_blocked_start(self):
+        rows, report = self.recorded_run('initial_non_neutral', mode='manual')
+        self.assertTrue(inspect_run(rows, report, 'neutral-gate')['verdict'].startswith('PASS'))
+        rows, report = self.recorded_run(mode='manual')
+        self.assertEqual(inspect_run(rows, report, 'neutral-gate')['verdict'], 'FAIL')
+
+    def test_automation_fault_and_timing_profiles_pass_without_unlatching(self):
+        for scenario, profile in (('sensor_error', 'imu-fault'),
+                                  ('pitch_range', 'pitch-range'), ('timing_rearm', 'timing-fault')):
+            with self.subTest(scenario=scenario):
+                rows, report = self.recorded_run(scenario)
+                result = inspect_run(rows, report, profile)
+                self.assertEqual(result['issues'], [])
+                self.assertTrue(result['verdict'].startswith('PASS'))
+
+    def test_corrupt_pulse_and_early_fault_cannot_pass_normal_profile(self):
+        rows, report = self.recorded_run()
+        rows[-1]['servo_pitch'] = 2500
+        self.assertEqual(inspect_run(rows, report, 'stabilize')['verdict'], 'FAIL')
+        rows, report = self.recorded_run()
+        # Ein alter Fehler darf nicht durch den 20-s-CSV-Ring verschwinden.
+        report['fault_iterations']['IMU_RUNTIME'] = 1
+        self.assertEqual(inspect_run(rows, report, 'stabilize')['verdict'], 'FAIL')
+
+    def test_event_overflow_is_incomplete_and_nonfinite_summary_is_rejected(self):
+        rows, report = self.recorded_run()
+        report['events_dropped'] = 1
+        self.assertEqual(inspect_run(rows, report, 'stabilize')['verdict'], 'BEFUND / UNVOLLSTAENDIG')
+        report['timing']['work']['max_us'] = float('nan')
+        with self.assertRaises(ValueError):
+            inspect_run(rows, report, 'stabilize')
+
+    def test_missing_whole_run_statistics_cannot_pass(self):
+        rows, report = self.recorded_run()
+        report['timing']['work']['count'] = 0
+        with self.assertRaises(ValueError):
+            inspect_run(rows, report, 'stabilize')
+
+    def test_csv_rejects_missing_columns_and_nonfinite_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)/'bad.csv'
+            path.write_text('ms,mode\n0,SENSOR\n')
+            with self.assertRaises(ValueError):
+                read_csv(path)
+            _, state, _ = FlowTests().simulate('normal', save_log=True)
+            line = state['log_rows'][-1].strip().split(',')
+            line[RingLog.HEADER.strip().split(',').index('dt_ms')] = 'nan'
+            path.write_text(RingLog.HEADER+','.join(line)+'\n')
+            with self.assertRaises(ValueError):
+                read_csv(path)
+
+    def test_cli_reads_real_file_pair_and_rejects_missing_summary(self):
+        import json
+        _, state, _ = FlowTests().simulate('normal', axes=('roll', 'pitch', 'yaw'), save_log=True)
+        report = state['reports'][0]
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)/report['csv_file']
+            path.write_text(RingLog.HEADER+''.join(state['log_rows']))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(analyze_main([str(path), '--expect', 'stabilize']), 2)
+            path.with_suffix('.json').write_text(json.dumps(report))
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(analyze_main([str(path), '--expect', 'stabilize']), 0)
 
 
 if __name__ == '__main__':

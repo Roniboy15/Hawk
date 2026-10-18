@@ -3,5 +3,6 @@ __pycache__/
 .DS_Store
 logs/
 bench_*.csv
+bench_*.json
 .venv/
 .thonny/

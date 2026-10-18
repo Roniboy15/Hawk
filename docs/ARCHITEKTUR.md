@@ -86,6 +86,36 @@ AUTO_START=False; die Richtungsbestaetigungen bleiben erhalten. Versorgung und
 Fehler-/Timingqualifikation sind separat offen; siehe
 [Testbericht](TESTBERICHT_2026-10-13.md) und [naechste Schritte](NAECHSTE_SCHRITTE.md).
 
+## Tischtest-Diagnose (v0.2.3)
+
+diagnostics.py sammelt min/max/Mittelwerte und Zaehler statt komplette 100-Hz-
+Verlaeufe: period ist der Abstand zweier Iterationsstarts inklusive vorheriger
+Diagnose, Statistik, sleep und Scheduler; pre_output bis unmittelbar vor write();
+write ist die Outputs.write()-Dauer; work reicht von Start bis nach Konsole/CSV-
+Formatierung, ohne anschliessenden Statistik-Update und sleep. Erster Startabstand
+wird nicht als volle Periode gewertet. Abgebrochene letzte Iteration ist markiert.
+
+CSV bleibt 200 Zeilen, jetzt 30 Spalten; zusaetzliche Zustandszeilen werden sofort
+auch zwischen 10-Hz-Samples gespeichert und verkuerzen ggf. den Ringzeitraum.
+RX-Pulse/konservative Alter/Sequenzen, Gate und Ausgabedauer sind enthalten.
+0-Pulse bedeuten "keine Ausgabe/Eingabe", -1 bei Alter/Zeit "unbekannt/nicht aktiv".
+Die bis zu 64 Ereignisse halten Modus/Fault/PWM/Freigabe/RX/Servo-Kommandos.
+Zeitmaxima und Modus-/Faultzaehler umfassen jede abgeschlossene Iteration und
+gehen beim Ueberschreiben von CSV/Ereignissen nicht verloren. Kein Flash im Loop.
+
+Nach bestaetigter PWM-/PIO-Abschaltung exportiert die App CSV plus JSON mit
+verwendeter Konfiguration, Kalibrierung und Runtime. JSON ersetzt keine Code-
+Sicherung oder Messung am GPIO. Ein langsamer Print kann erst bei Rueckkehr bzw.
+naechster Iteration erkannt werden; permanente Blockade bleibt unbeherrscht.
+Erfassung kostet RAM/CPU und muss auf dem Board gemessen werden. API:
+[ticks_diff](https://docs.micropython.org/en/latest/library/time.html).
+
+bench_test.py bietet explizite RAM-Profile und setzt cfg nach Rueckkehr zurueck;
+kein Start beim Import. pitch-range setzt nur die reale Grenze voruebergehend
+auf 20 Grad. tools/analyze_bench.py ist ein reiner Hostauswerter; keine MCU-Imports.
+Fehlende/alte/ungueltige Daten oder verlorene Ereignisse erzeugen keinen PASS.
+Pruefanleitung: [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
+
 ## Kalibrierung, Referenz, Trimmung
 
 - Accel Offset/Skalierung: die vorlaeufig gemessenen sechs Lagen sind in config.

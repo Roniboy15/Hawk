@@ -1,7 +1,7 @@
-# Validierung — v0.2.2-bench
+# Validierung — v0.2.3-bench
 
-Hostlauf am 2026-10-13: 68 automatische Tests bestanden, CPython 3.9.6.
-Alle 13 Firmwaredateien werden zusaetzlich per AST im RAM auf Python-Syntax
+Letzter Hostlauf am 2026-10-18: 94 automatische Tests bestanden, CPython 3.9.6.
+Alle 15 Firmwaredateien und der Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
 ```sh
@@ -57,6 +57,34 @@ an positive Nick-/Gierkommandos bei 1800-us-RX. Sie wurden wie beim Rolltest
 an die konfigurierte RX-Polung angepasst; zusaetzliche Pulspruefungen sichern
 die zweite Vorzeichenstufe ab. Regler-/Filteralgorithmen und Gains sind unveraendert.
 
+## Neu hostgeprueft fuer v0.2.3
+
+- Je Roll/Nick/Gier: fehlender Eingang verhindert alle drei PWM-Ausgaenge;
+  Kanalverlust neutralisiert alle, Rueckkehr mit nichtneutralem Knueppel sperrt
+  weiter, neue gemeinsame Neutralframes geben MANUAL wieder frei.
+- Automatikfaults IMU_RUNTIME, PITCH_RANGE und TIMING bleiben bei drei aktiven
+  Achsen verriegelt; gueltiger RX ermoeglicht nur manuellen Ersatz.
+- Per-Iteration-Zeitmaxima/Zaehler, Ausnahme der ersten Startdifferenz, begrenzter
+  Ereignisring mit Ueberschreibzaehler, Tick-Umlauf und unbekanntes RX-Alter.
+- Verzögerte Konsole steckt in work/period; nach Rueckkehr erkennt der naechste
+  Loop den Timingverlust. Auch vor Ausgabe erkannte Controllerlatenz wird gezaehlt.
+- Modus-/Fault-Wechsel werden zwischen periodischen CSV-Samples erfasst.
+- JSON mit Konfiguration/Runtime/geladenen Kalibrierwerten erst nach bestaetigter
+  Abschaltung; Start-/Cleanupfehler exportieren keinen Laufbericht.
+- Frische, unveraenderte PWM-Pulse bleiben als gueltige Eingaben sichtbar:
+  kein falscher Anspruch, damit Funkverlust erkannt zu haben.
+- Expliziter bench_test-Einstieg blockiert AUTO_START=True/ungueltige Profile,
+  stellt RAM-Modus/20-Grad-Testgrenze nach Startfehler und Ctrl+C wieder her.
+- Hostauswerter akzeptiert passende Softwarefolgen, lehnt falsche Pulse/Faults,
+  fehlende Felder/JSON, NaN, unvollstaendige Zeitstatistik und verlorene Ereignisse
+  als PASS ab. CLI-Dateipaar und JSON-Roundtrip geprueft.
+
+Keiner dieser Tests greift auf reale PIO/PWM/I2C zu. Physische v0.2.3-Pruefungen
+stehen aus. Die **konkreten naechsten Tests T1–T6** stehen in
+[FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md), Vorlage:
+[TESTPROTOKOLL_FEHLER.md](TESTPROTOKOLL_FEHLER.md). Sensor-/Zeitfehler bleiben
+hier hostsimuliert; T6 prueft physisch nur den echten Winkelgrenz-Fault.
+
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 
 Der Besitzer bestaetigt korrekte MANUAL-Ruderwirkung und korrekte Rollstabilisierung
@@ -95,7 +123,7 @@ Die Samples beweisen keine mechanische Wirkung, Funkverlustreaktion,
 Versorgungsreserve oder Laufzeitgrenze. Exakte MCU-Dateien, Runtime,
 calibration.json und tatsaechliche physische Pinpfade sind noch nicht archiviert.
 
-Gespeicherter Abschlussstand: VERSION=0.2.2-bench, AUTO_START=False,
+Gespeicherter Abschlussstand f66ccd1: VERSION=0.2.2-bench, AUTO_START=False,
 START_MODE='sensor', ACTIVE_AXES und DIRECTION_CHECKED_AXES beide
 ('roll','pitch','yaw'), RX-/Servozeichen jeweils -1/-1. SENSOR ist die einzige
 bewusste Abweichung vom gemeldeten STABILIZE-Testprofil. Er erzeugt keine MCU-PWM.

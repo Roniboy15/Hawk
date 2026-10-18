@@ -11,7 +11,7 @@ Nase hoch muss einen negativen Nick-Sollwert erhalten; nicht den Gyro einzeln dr
 Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 """
 
-VERSION = '0.2.2-bench'
+VERSION = '0.2.3-bench'
 AUTO_START = False
 # Besitzer meldet am 2026-10-13 alle Achsentests bestanden. Gespeicherter Stand
 # startet zur erneuten Sichtpruefung ohne PWM; STABILIZE bewusst am Tisch waehlen.
@@ -65,6 +65,7 @@ CONTROLLERS = {
 FLIGHT_ATTITUDE_TRIM = {'roll': 0.0, 'pitch': 0.0}  # Solllage, NICHT Sensoroffset
 
 LOG_HZ = 10
-LOG_CAPACITY = 200                 # letzte 20 Sekunden, fester RAM-Ring
+LOG_CAPACITY = 200                 # ca. 20 s bei 10 Hz; extra Zustandszeilen verkuerzen den Rest
+EVENT_CAPACITY = 64                # letzte Zustands-/Fault-Wechsel; ganze Laufstatistik separat
 CONSOLE_HZ = 4
 SAVE_LOG_ON_STOP = True            # erst NACH Abschalten der PWM auf Flash

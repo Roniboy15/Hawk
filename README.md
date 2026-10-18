@@ -1,4 +1,4 @@
-# Segelflug-Controller — Version 0.2.2, Bodenversuch
+# Segelflug-Controller — Version 0.2.3, Bodenversuch
 
 Modulare MicroPython-Firmware fuer RP2040-Zero und das bereits getestete
 MPU-kompatible SY-104-Modul (WHO_AM_I 0x72). Konventionelles Flugzeug mit
@@ -18,6 +18,11 @@ passen zur Regelrechnung. Elektrische Grenzen, Fehlerreaktionen und
 Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ableiten.
 
 ## Start hier
+
+**Aktueller Schritt:** [FEHLER_TISCHTEST.md](docs/FEHLER_TISCHTEST.md) gibt die
+konkreten T1–T6-Ablaeufe und Thonny-Aufrufe vor. Mit
+[TESTPROTOKOLL_FEHLER.md](docs/TESTPROTOKOLL_FEHLER.md) Ergebnisse erfassen.
+Die neue Diagnose ist hostgeprueft; physische v0.2.3-Tests stehen noch aus.
 
 1. [TESTBERICHT_2026-10-13.md](docs/TESTBERICHT_2026-10-13.md): abgeschlossener
    Achsen-Funktionstest, Logauswertung und Grenzen des Nachweises.
@@ -48,6 +53,13 @@ pitch_down zeigt daher negative Werte beim Nase-anheben. Kalibrierschema 1
 bleibt erhalten; calibrate_rc.run(('pitch',)) erfasst optional nur den neuen Kanal.
 Startphasen/Tickzeiten und Gyro-/Gier-Sollrate helfen bei Diagnose; CSV ist erweitert.
 
+v0.2.3 erfasst Zeitstatistiken jeder abgeschlossenen Iteration und bis zu 64
+Zustandswechsel im RAM. Nach Stop entstehen bench_<ticks>.csv (30 Spalten) und
+bench_<ticks>.json mit Konfiguration, Geraetekalibrierung, Runtime, Maxima und
+Ereignissen. tools/analyze_bench.py wertet das Paar auf dem Mac aus. Der explizite
+Starter bench_test.run(profile) kennt sensor, manual, stabilize und pitch-range;
+er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder her.
+
 ## Dateien
 
 | Datei in firmware/ | Aufgabe / Einstieg |
@@ -55,6 +67,7 @@ Startphasen/Tickzeiten und Gyro-/Gier-Sollrate helfen bei Diagnose; CSV ist erwe
 | config.py | Einziger Ort fuer Pins, Achsen, Grenzwerte und Reglerparameter |
 | main.py | Autostart; standardmaessig deaktiviert |
 | start_test.py | In Thonny ausfuehren, ruft app.run() auf |
+| bench_test.py | Explizite Tischtestprofile aus der Thonny-Shell |
 | app.py | Regelschleife und Zustandswechsel |
 | calibration.py | JSON-Einstellungen pruefen und speichern |
 | calibrate_rc.py | Explizite RC-Min/Mitte/Max-Erfassung |
@@ -65,6 +78,7 @@ Startphasen/Tickzeiten und Gyro-/Gier-Sollrate helfen bei Diagnose; CSV ist erwe
 | control.py | Regler und einmalige Neutralfreigabe |
 | outputs.py | Servopulse, Vorzeichen, Trim und Grenzwerte |
 | logger.py | Begrenzter RAM-Ring, CSV-Export nach dem Stoppen |
+| diagnostics.py | Zeitstatistik/Zustandsring, JSON-Laufbericht nach dem Stoppen |
 
 Alle Python-Dateien enthalten am Anfang Aufgabe, Hauptfunktionen und Logik.
 Tests und Dokumentation gehoeren auf den Mac, nicht auf den MCU.

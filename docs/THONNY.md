@@ -1,5 +1,11 @@
 # Thonny: Sicherung, Upload, Kalibrierung und Achsentests
 
+**Aktueller v0.2.3-Schritt:** [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
+Alle 15 Firmwaremodule hochladen, vorhandene calibration.json erhalten. Danach
+die dortigen bench_test.run(...)-Aufrufe am Shell-Prompt verwenden. Kein Import-
+Autostart; Testmodi liegen nur im RAM. Die folgenden Abschnitte bleiben als
+grundlegende Inbetriebnahme-/Kalibrieranleitung bestehen.
+
 ## 1. Bisherige funktionierende Version sichern
 
 In Thonny die aktuelle MCU-Datei und roll_level_cal_v1.json oeffnen und auf
@@ -129,8 +135,11 @@ es einen expliziten Befehl/Modus, bevor wir Werte im Flug speichern.
 
 ## 10. Logs
 
-Loggt 10 Hz in einen RAM-Ring (200 Eintraege = letzte ca.20 Sekunden).
+Loggt 10 Hz plus Zustandswechsel in einen RAM-Ring (200 Eintraege, etwa bis 20 Sekunden).
 Ctrl+C stoppt zuerst PWM/PIO und schreibt danach bench_<ticks>.csv auf Flash.
+v0.2.3 schreibt auch bench_<ticks>.json mit Statistik/Runtime/Konfiguration/
+Kalibrierwerten. **Beide Dateien** zusammen herunterladen; Maxima gelten fuer
+jede abgeschlossene Iteration, auch wenn alte CSV-Zeilen ueberschrieben sind.
 CSV auf Mac in logs/ herunterladen. Laufende Rohlogs werden nicht mit Git committed.
 Ein bewusst ausgewaehlter kleiner Nachweis darf unter docs/testdaten/ zusammen
 mit Testbericht und Herkunft versioniert werden; so ist der Achsentest von

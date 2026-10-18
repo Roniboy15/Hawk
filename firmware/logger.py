@@ -3,13 +3,17 @@
 Hauptklasse RingLog: append() ueberschreibt aelteste Zeile, save() exportiert.
 Logik: letzte LOG_CAPACITY Datensaetze im RAM. Export nur nach gestoppter PWM.
 Stromverlust verliert den RAM-Inhalt. Dies ist KEIN dauerhafter Fluglogger.
-Felder: Zeit, Modus, Koerperwinkel, Sollwerte, Servopulse, dt, Gyro, Gier-Sollrate, Fehler.
-Winkel wie bisher: +Nick=Nase runter, +Gier=Nase links. v0.2.2 erweitert CSV.
+Felder: Zeit, Modus, Winkel/Sollwerte, Pulse, dt, Gyro, Fehler; ab v0.2.3 auch
+Ausgabezeit, RX-Pulse/Alter/Sequenzen und Freigabe. Winkelzeichen unveraendert.
 """
 
 
 class RingLog:
-    HEADER = 'ms,mode,roll,pitch,yaw,target_roll,target_pitch,servo_roll,servo_pitch,servo_yaw,dt_ms,gyro_roll,gyro_pitch,gyro_yaw,target_yaw_rate,fault\n'
+    HEADER = ('ms,mode,roll,pitch,yaw,target_roll,target_pitch,servo_roll,servo_pitch,'
+              'servo_yaw,dt_ms,gyro_roll,gyro_pitch,gyro_yaw,target_yaw_rate,fault,'
+              'pre_output_us,write_us,rx_roll,rx_pitch,rx_yaw,rx_age_roll_ms,'
+              'rx_age_pitch_ms,rx_age_yaw_ms,rx_seq_roll,rx_seq_pitch,rx_seq_yaw,'
+              'neutral_count,armed,fresh\n')
 
     def __init__(self, capacity=200):
         if capacity < 1:
@@ -17,11 +21,13 @@ class RingLog:
         self.rows = [None]*capacity
         self.index = 0
         self.count = 0
+        self.total = 0
 
     def append(self, row):
         self.rows[self.index] = row
         self.index = (self.index+1) % len(self.rows)
         self.count = min(self.count+1, len(self.rows))
+        self.total += 1
 
     def ordered(self):
         start = (self.index-self.count) % len(self.rows)
