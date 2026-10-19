@@ -4,6 +4,8 @@ __pycache__/
 logs/
 bench_*.csv
 bench_*.json
+sensors_*.csv
+sensors_*.json
 # Reviewed bench evidence; other automatically generated logs stay ignored.
 !docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.csv
 !docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.json

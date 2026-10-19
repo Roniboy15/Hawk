@@ -4,6 +4,12 @@ Eingang/Auswertung: 2026-10-18. Der Besitzer meldet T3, T5 und T6 wie erwartet
 durchgefuehrt und funktional bestanden. T4 bleibt auf seinen Wunsch **OFFEN**:
 der vorbereitete Signalschalter wurde nicht eingebaut.
 
+Nachtrag zur Projektplanung am selben Tag: Tischteststand als **913a9e6**
+gesichert. Der Besitzer priorisiert nun GPS-/Barometerchecks und danach manuelle
+Datenfluege durch den MCU, bei akzeptiertem fehlendem unabhaengigem Rueckweg.
+Timingarbeit laeuft weiter; die Messbefunde unten bleiben bestehen. Aktueller
+Plan: [NAECHSTE_SCHRITTE.md](../../NAECHSTE_SCHRITTE.md).
+
 Die CSV/JSON-Paare bestaetigen die unten abgegrenzten Softwarefolgen.
 T5 verfehlt jedoch das 100-Hz-Ziel; T6 enthaelt zusaetzlichen Gier-Pulsverlust,
 laut nachtraeglicher Besitzerbestaetigung durch einen herausgefallenen Stecker.
@@ -133,11 +139,13 @@ letzten Verlust. Die urspruenglichen Rohdaten bleiben unveraendert erhalten.
    ersten Fault mit Phase/Exceptiontext im JSON erhalten. Anschliessend nach
    Messung optimieren. Erster T1-IMU_RUNTIME bleibt offen. Konkreter Folgeumfang:
    [NAECHSTE_SCHRITTE.md](../../NAECHSTE_SCHRITTE.md).
-3. T4 bleibt offen. Versorgung/USB-Verlust, Empfaenger-Failsafe und ein bei
-   MCU-Ausfall funktionierender Rueckweg sind vor einem Flug zu qualifizieren.
-4. Ergebnisse und Rohdaten auf codex/bench-fault-validation committen, dann
-   codex/timing-fault-diagnostics vom neuen Ergebniscommit abzweigen. main
-   zunaechst unveraendert lassen. Hier kein Commit/Branchwechsel/Merge/Push.
+3. T4, Versorgung/USB-Verlust und Empfaenger-Failsafe bleiben offene Nachweise.
+   Ein unabhaengiger Rueckweg bleibt empfohlen; der Besitzer akzeptiert dessen
+   Fehlen fuer die geplanten MCU-MANUAL-Datenfluege. Damit ist das Risiko
+   dokumentiert, nicht behoben oder als Ausfallsicherheit nachgewiesen.
+4. Ergebniscommit 913a9e6 und Folgebranch codex/gps-baro-bringup sind erstellt;
+   main bleibt unveraendert. Kein Merge/Push wurde durchgefuehrt. Der urspruengliche
+   Plan eines reinen Timingbranches wurde durch die Sensorprioritaet ersetzt.
 
 ## Hostpruefung dieser Auswertung
 

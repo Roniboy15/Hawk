@@ -42,7 +42,11 @@ Pitch >75 Grad ergibt softwareseitigen manuellen Ersatz, nicht Neutral-Lock.
 Trimneutral kann je nach Flugzeug ungeeignet als Funkverlustverhalten sein.
 Dies ist ein Boden-Testzustand, kein fertig definierter Flug-Failsafe.
 Es gibt weder einen in-flight Mode-Schalter noch einen Hardware-Bypass.
-Ein Softwarefallback hilft nicht, wenn MCU oder Bus blockieren.
+Ein Softwarefallback hilft nicht, wenn MCU oder Bus blockieren. Besitzerentscheidung
+2026-10-18: dieses Risiko fuer geplante MCU-MANUAL-Datenfluege akzeptieren,
+Sensorentwicklung fortsetzen und anhand der Messdaten neu bewerten. Ein
+unabhaengiger Rueckweg bleibt eine Empfehlung, kein neu erfundener Stop fuer
+Sensorarbeit. Eine autonome Kreisfunktion ist separat zu implementieren.
 
 ## Zeitverlust und RC-Alter (v0.2.1)
 
@@ -75,7 +79,7 @@ MicroPython-API-Bezug: [StateMachine](https://docs.micropython.org/en/latest/lib
 [PIO/FIFO](https://docs.micropython.org/en/latest/library/rp2.html),
 [Tick-Arithmetik](https://docs.micropython.org/en/latest/library/time.html),
 [PWM](https://docs.micropython.org/en/latest/library/machine.PWM.html).
-Die konkrete installierte MicroPython-Version ist noch zu dokumentieren.
+Die v0.2.3-Laufberichte dokumentieren MicroPython v1.29.0 / RP2040-Zero.
 
 v0.2.2 ergaenzt Startphasen-Tickzeiten und Gyroachsen/Gier-Sollrate in den CSV-Logs.
 CSV-Auswerter muessen den Header lesen; Winkelzeichen und Kalibrierdatei bleiben
@@ -115,6 +119,24 @@ kein Start beim Import. pitch-range setzt nur die reale Grenze voruebergehend
 auf 20 Grad. tools/analyze_bench.py ist ein reiner Hostauswerter; keine MCU-Imports.
 Fehlende/alte/ungueltige Daten oder verlorene Ereignisse erzeugen keinen PASS.
 Pruefanleitung: [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
+
+## Separate GPS-/Barometer-Vorbereitung
+
+Der Branch codex/gps-baro-bringup ergaenzt GPS-NMEA und MS5611 an freien Pins:
+UART0 RX GP13 (TX GP12 unverbunden), I2C1 SDA/SCL GP10/GP11. IMU bleibt auf
+I2C0. Neue Einstellungen stehen in config.py; app.run() nutzt sie noch nicht.
+
+gps.py begrenzt Rahmen-/UART-Lesen und prueft GGA/RMC, Pruefsumme und Datenalter.
+Ein gemeinsamer Fix braucht gueltige frische Saetze derselben UTC-Epoche.
+ms5611.py prueft PROM-CRC, kompensiert Temperatur/Druck und wartet die ADC-
+Wandlungen ueber Zustandswechsel statt blockierendes sleep ab. sensor_test.py
+startet diese Adapter explizit ohne Receiver/PWM und exportiert einen begrenzten
+Logrest plus Laufbericht. Das ist weder Navigation noch ein vollstaendiger Fluglogger.
+
+Naechster Integrationsschritt nach den physischen Sensorchecks: Daten gemeinsam
+mit dem bisherigen MANUAL-Durchgang aufzeichnen, Zusatzaufwand messen und einen
+Speicherweg fuer ganze Datenfluege implementieren. Anleitung und Nachweisgrenzen:
+[SENSOREN_TEST.md](SENSOREN_TEST.md).
 
 ## Kalibrierung, Referenz, Trimmung
 

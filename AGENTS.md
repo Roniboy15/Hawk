@@ -3,7 +3,8 @@
 ## Scope and current setup
 
 This is RP2040 MicroPython firmware for glider ground experiments. There is
-no established flight release; the current goal is supervised table testing.
+no established flight release. Current work is GPS/barometer bring-up, followed
+by manual data collection and a reassessment using measured results.
 
 Owner-reported setup (2026-10-11):
 
@@ -28,9 +29,9 @@ independently prove actual pin wiring, mechanical effect or error recovery.
 Basic direction/function acceptance is owner-reported; power, timing and fault
 qualification remain open. See docs/TESTBERICHT_2026-10-13.md for evidence.
 The owner approved this completion commit and the next branch on 2026-10-13.
-Current branch: `codex/bench-fault-validation`, starting from the completed
-step's commit f66ccd1;
-do not branch from an older main or treat a bench commit as a flight release.
+Table-test results are committed as 913a9e6 on codex/bench-fault-validation.
+Current branch: codex/gps-baro-bringup, starting from that result commit.
+Do not branch from an older main or treat a bench commit as a flight release.
 
 v0.2.3 adds bounded per-iteration timing aggregates, a transition ring and CSV/JSON
 reports exported only after confirmed shutdown. Physical results and open items
@@ -62,7 +63,18 @@ before repeat tests. T4 is deliberately OPEN because no signal switch was
 installed; the incidental T6 event does not replace it. Only one T5 run is archived.
 The T6 frozen pitch plus level reference is consistent with the negative 20-degree
 boundary. Preserve calibration/signs; account for the absolute boundary in repeats.
-Next code scope is timing/fault diagnostics, not gain tuning or navigation.
+Owner decision (2026-10-18): progress with BN-180 GPS and GY-63/MS5611 sensor
+checks first, then collect flight data using the existing MCU MANUAL-through
+path. The owner explicitly accepts the absence of an independent manual fallback;
+do not impose a new approval gate or block sensor work on a bypass or exactly
+100 Hz. Record the risk honestly: MANUAL still needs the MCU, and a low failure
+probability is not established. Timing/fault investigation continues alongside
+sensor work and later data collection; it is not a blanket stop on development.
+An autonomous circle remains a later navigation/control implementation, not a
+feature enabled merely by attaching GPS/barometer. The current standalone
+sensor_test profiles never start app/PWM and are not yet a flight logger.
+GY-63 pin labels are owner-confirmed: VCC/GND/SCL/SDA/CSB/SDO/PS. GPS cable
+pin order and actual signal level remain to be checked before physical connection.
 See docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md and
 docs/NAECHSTE_SCHRITTE.md. Do not label all fault/timing qualification complete.
 
@@ -98,7 +110,9 @@ Require SENSOR/MANUAL direction checks before adding an axis to
 an operator acknowledgement, not an independent proof of correct wiring.
 Do not infer sensor identity, signal freshness, timing guarantees or flight readiness
 from host tests, register readback or WHO_AM_I alone.
-An independent recovery strategy is required before considering flight operation.
+An independent recovery strategy remains an engineering recommendation. Respect
+the owner's accepted test risk above; never describe the absent path as implemented
+or certify flights from successful host/table tests.
 
 ## Validation and reporting
 

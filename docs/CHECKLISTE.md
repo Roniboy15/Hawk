@@ -10,18 +10,19 @@
   ```
 
 - [ ] Prüfen: Auf welchem Branch bin ich? Gibt es uncommittete Änderungen?
-- [ ] Bei einem **neuen Entwicklungsschritt** erst Ergebnisse auf
-  `codex/bench-fault-validation` committen. Dann vom neuen Ergebniscommit
-  fuer Laufzeit-/Fehlerdiagnose abzweigen, nicht von der aelteren main:
+- [ ] Tischteststand ist bereits als 913a9e6 gesichert. Der Sensorbranch
+  `codex/gps-baro-bringup` wurde davon erstellt. Fuer einen spaeteren **neuen
+  Entwicklungsschritt** erst den passenden Abschlusscommit sichern, dann davon
+  abzweigen, nicht von der aelteren main. Beispiel fuer die spaetere Loggerarbeit:
 
   ```bash
-  git switch -c codex/timing-fault-diagnostics
+  git switch -c codex/manual-sensor-logging
   ```
 
 - [ ] Bei einem **laufenden Schritt** auf dessen Branch wechseln:
 
   ```bash
-  git switch codex/bench-fault-validation
+  git switch codex/gps-baro-bringup
   ```
 
   Vor einem Branchwechsel offene Änderungen bewusst sichern.
@@ -76,6 +77,9 @@
 
 ### 5. Bodentest durchführen
 
+- [ ] Im aktuellen Sensorschritt zuerst [S1/S2/S3](SENSOREN_TEST.md) ohne
+  BEC/Servos ausfuehren. Die folgenden Aktuatorpunkte gelten fuer die getrennten
+  Steuerungspruefungen, nicht fuer sensor_test.run().
 - [ ] Sender einschalten und richtige Einstellungen prüfen.
 - [ ] BEC/Batterie anschließen; MCU-Versorgung wie geplant herstellen.
 - [ ] Bei neuen Funktionen zuerst `sensor`, dann `manual`, zuletzt `stabilize` testen.

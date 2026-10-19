@@ -69,3 +69,15 @@ LOG_CAPACITY = 200                 # ca. 20 s bei 10 Hz; extra Zustandszeilen ve
 EVENT_CAPACITY = 64                # letzte Zustands-/Fault-Wechsel; ganze Laufstatistik separat
 CONSOLE_HZ = 4
 SAVE_LOG_ON_STOP = True            # erst NACH Abschalten der PWM auf Flash
+
+# Separater GPS-/Barometer-Funktionstest; app.run() nutzt diese Module noch nicht.
+# Keine GPS-Konfiguration senden: GPS-RX bleibt frei, GP12 ist nur reservierter TX.
+# Neuer I2C1-Bus schuetzt den bestehenden IMU-Bus auf GP4/GP5 vor Umbauten.
+GPS = {'uart': 0, 'tx': 12, 'rx': 13, 'baudrate': 9600,
+       'rxbuf': 1024, 'max_read': 256, 'stale_ms': 2500, 'max_poll_ms': 100,
+       'course_min_speed_ms': 2.0}
+BAROMETER = {'i2c': 1, 'sda': 10, 'scl': 11, 'freq': 100000,
+             'address': None, 'sample_ms': 100}
+SENSOR_TEST = {'version': '0.1.0', 'loop_us': 10000, 'log_hz': 5,
+               'console_hz': 1, 'capacity': 200,
+               'reference_warmup_ms': 2000, 'reference_samples': 20}

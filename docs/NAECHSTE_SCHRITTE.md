@@ -1,134 +1,113 @@
-# Naechster Schritt nach den Tischtests
+# Aktueller Weg: Sensoren pruefen, manuell Daten sammeln, neu bewerten
 
-Stand 2026-10-18: Roll/Nick/Gier funktionieren laut Besitzer. T1-Wiederholung,
-T2 und alle drei T3-Varianten sind durch CSV/JSON bestaetigt. T5 bestaetigt
-Stabilisierung, T6 die PITCH_RANGE-Verriegelung. **T4 bleibt auf Besitzerwunsch
-OFFEN**; es wurde kein vorbereiteter Signalschalter eingebaut.
+Besitzerentscheidung vom 2026-10-18: pragmatisch zur nutzbaren Flugfunktion
+weiterarbeiten. GPS/Barometer und manuelle Messfluege werden vorbereitet;
+Timingverbesserung bleibt Arbeit, exakt 100 Hz ist keine pauschale Sperre fuer
+Sensorentwicklung. Der Besitzer moechte weiterhin den MCU-MANUAL-Durchgang
+verwenden und akzeptiert dessen Abhaengigkeit vom MCU. Ausfallfreiheit ist damit
+nicht nachgewiesen. Unabhaengiger Rueckweg bleibt eine Engineering-Empfehlung.
 
-Die [aktuelle Auswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md)
-trennt bestandene Funktionen von offenen Befunden. T5 erreicht nur ca. 74.92 Hz,
-99.44 % der work-Zeiten liegen ueber dem 10-ms-Ziel. T6 zeigt spaeter Gier-
-Pulsverlust mit korrekter Trimneutral-Reaktion; laut spaeterer Besitzerbestaetigung
-war ein Stecker herausgefallen. Der erste T1-IMU_RUNTIME und
-unkontrollierte Ausschlaege bei abruptem MCU-Stromverlust sind nicht geklaert.
-Gains, Vorzeichen, Kalibrierung und die harte 50-ms-Grenze bleiben unveraendert.
-Keine Flugfreigabe und noch keine Flug-Gainabstimmung aus diesen Tischtests.
+## 1. Erledigt und gesichert
 
-## 1. Steckverbindung sichern
+Tischteststand **913a9e6** auf codex/bench-fault-validation committed. Neuer
+Branch **codex/gps-baro-bringup** wurde von diesem Commit erstellt; main blieb
+unveraendert. Keine Veroeffentlichung oder MCU-Uebertragung durch Git.
 
-Der Besitzer bestaetigt nachtraeglich: bei T6 war ein Stecker herausgefallen.
-Das erklaert den Gier-Pulsverlust ab 49.402 s bei weiterlaufendem Roll-/Nickempfang.
-Die Software reagierte wie vorgesehen mit Trimneutral; der Befund wird als
-erklaerte Steckunterbrechung gefuehrt, nicht als ungeklaerter Empfangsfehler.
-Der genaue Steckort und elektrische Verlauf sind nicht unabhaengig gemessen.
+T1-Wiederholung/T2/T3 funktional bestaetigt, T5 Stabilisierung und T6 Fehlersperre
+bestaetigt. T4 bleibt bewusst offen. Der lose Stecker erklaert den Gierverlust;
+Verbindung vor Wiederholungen sichern. T5: im Mittel 74.92 Hz, work maximal
+32.323 ms, keine harte 50-ms-Ueberschreitung. Erster T1-IMU_RUNTIME bleibt offen.
+Die [Testauswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md)
+haelt die Nachweise und ihre Grenzen fest.
 
-Bei getrennter USB- und BEC-Versorgung die betroffene Verbindung wiederherstellen,
-festen Sitz und Zugentlastung pruefen. Danach zuerst SENSOR mit fortlaufenden
-RX-Sequenzen aller drei Kanaele pruefen, bevor erneut Servos angesteuert werden.
-Keine Live-Umverdrahtung und kein erneutes absichtliches
-USB-Abziehen bei eingeschalteten Servos. Die korrigierte Stop-/Downloadfolge
-in [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md) bleibt verbindlich.
-T4 darf fuer diesen Entwicklungsschritt offen bleiben; vor Abschluss der
-Signalverlustqualifikation braucht es einen kontrollierten Nachweis.
+## 2. Jetzt konkret: S1, S2, S3
 
-## 2. Konkreter naechster Codeumfang: Laufzeit- und Fehlerdiagnose
+Der eigene Vorbereitungscommit auf dem neuen Branch umfasst:
+GPS-NMEA-Empfang, MS5611-Treiber und separater sensor_test ohne app/PWM.
+Gains, Servozeichen und Kalibrierung werden dafuer nicht umgestellt.
 
-Ziel: Aus den pauschalen Timing-/Faultbefunden die langsame Phase und die Art
-des Empfangs-/Sensorfehlers bestimmen. Noch nicht in dieser Doku-Runde implementiert.
+1. **Anschluss klaeren:** GY-63-Pins sind bekannt. Beim BN-180 fehlen noch
+   eindeutige Kabelzuordnung und Bestaetigung des TX-Signalpegels. Die gelieferte
+   Spezifikation ersetzt diese Angaben nicht. Keine Kabelfarben raten.
+2. **S1 Barometer:** GY-63 an I2C1 GP10/GP11, erst Druck/Temperatur, dann
+   relative Hoehenaenderung beim Anheben pruefen. Keine Neukalibrierung der Lage.
+3. **S2 GPS:** BN-180 TX an UART0 RX GP13 nach Anschluss-/Pegelabgleich;
+   9600 Baud, draussen gueltige GGA/RMC und Standort/Bewegung pruefen.
+4. **S3 gemeinsam:** beide Sensoren 180 s betreiben und Logs sichern.
+   Erhaltene Werte, Gueltigkeit, Datenalter, Fehler und Laufzeiten vergleichen.
 
-1. **Laufzeit je Phase:** IMU-Lesen, Lagefilter, Receiver, Regler, PWM und
-   Diagnose/Konsole/CSV getrennt mit begrenzten RAM-Zaehlern erfassen. Bestehende
-   Gesamtzeiten beibehalten; Messaufwand selbst mitbeurteilen. Kein Print pro
-   Iteration, kein Flashzugriff waehrend der Schleife. Der T5-Mittelwert ist
-   bereits zu hoch; einzelne Jitterspitzen zu verringern reicht nicht aus.
-2. **Ersten Automatikfault dauerhaft beschreiben:** Zeitpunkt, Phase, Faultcode,
-   Exceptiontyp und begrenzten Exceptiontext einmal im RAM speichern und nach
-   bestaetigtem Stop ins JSON exportieren. Vorhandenen Fault nicht mit einem
-   spaeteren Folgefehler ueberschreiben. Damit wird ein weiterer IMU_RUNTIME
-   auch ohne noch sichtbare Thonny-Konsole untersuchbar.
-3. **RX-Verwerfungen unterscheiden:** pro Kanal begrenzte Zaehler fuer
-   ungueltige Pulsbreite, vollen FIFO und Pollpause sowie letzte gueltige
-   Sequenz/Alter exportieren. Startverwerfung getrennt zaehlen. Das ergaenzt
-   RX_TIMEOUT, ohne Funkverlust aus weiterhin gueltigen Hold-Pulsen zu behaupten.
-4. **Erst nach Messung gezielt optimieren:** wiederholte Objekt-/Stringerzeugung,
-   Sensorpuffer, Quaternionrechnung und Diagnoseaufwand anhand der Phasenwerte
-   beurteilen; immer nur eine belegte Ursache aendern. Keine ungepruefte I2C-
-   Takterhoehung, GC-Abschaltung oder lockeren Sicherheitsgrenzen als Abkuerzung.
+**Alle Verdrahtungstabellen, Uploaddateien und genauen Aufrufe stehen in
+[SENSOREN_TEST.md](SENSOREN_TEST.md).** BEC/Servos bleiben fuer diesen Schritt aus.
+Noch keine echten Sensorergebnisse oder Flugdaten vorhanden.
 
-Diese Reihenfolge ist eine Engineering-Empfehlung aus den Messwerten.
-Speicherallokation/GC ist eine Hypothese, keine nachgewiesene Ursache. Die
-[MicroPython-Dokumentation](https://docs.micropython.org/en/latest/reference/speed_python.html)
-beschreibt Heap-/GC-Pausen und empfiehlt zuerst die langsame Stelle zu messen.
-Sie betrifft den Entwicklungsstand; konkrete APIs gegen die installierte Runtime
-pruefen, keine dort genannten neuen Features ungeprueft uebernehmen.
+## 3. Anschliessend: MANUAL-Logger integrieren
 
-**Abnahme dieses Codeumfangs:**
+Nach S1/S2/S3 bauen wir auf den bisherigen MANUAL-Durchgang auf. Der separate
+Sensorstarter steuert keine Ruder und ist daher noch kein MANUAL-Flugprogramm.
 
-- Bestehende 94 Hosttests weiter erfolgreich; gezielte neue Tests fuer erste
-  Faultursache, begrenzte Counter, alle RX-Verwerfungsarten, Tick-Umlauf und
-  Export erst nach Shutdown. CSV-/JSON-Schema bei Erweiterung bewusst behandeln.
-- AUTO_START=False, SENSOR ohne PWM, Neutralgate, Ausgabebegrenzung und
-  verriegelter Ersatzmodus bleiben erhalten. Kein Upload/Hardwarestart durch
-  Hostwerkzeuge oder Modulimport.
-- Danach physisch T1 und T5 mit identischen Einstellungen wiederholen; Laufpaare
-  getrennt sichern, keine alten Fehlerdateien ersetzen. T5 mindestens dreimal
-  60 s. Phasenmittel/-maxima, Ueberschreitungen und unerwartete RX-/IMU-Ereignisse
-  gegen die jetzigen Daten vergleichen. SENSOR kann mit getrennter Servobatterie
-  untersucht werden; fehlende RX-Werte sind dann erwartet.
-- 100 Hz erst als nachgewiesen bezeichnen, wenn die beobachtete Rechenzeit
-  einschliesslich Diagnose in das 10-ms-Budget passt und Periodenjitter beurteilt
-  ist. Beobachtete Maxima bleiben keine Worst-Case-Garantie. Falls 100 Hz mit
-  dieser Architektur nicht erreichbar sind, die Regelrate spaeter bewusst neu
-  auslegen und validieren; nicht nur den Konfigurationswert herabsetzen.
+- Sensorpolling mit begrenztem Aufwand in den MANUAL-Ablauf integrieren;
+  keine ADC-Wartepausen oder GPS-Fix-Warteschleife zwischen RC und Servoausgabe.
+- Bordversorgung fuer MCU/Sensoren sowie bewussten Start und Logabschluss nach
+  Landung festlegen. Ein angeschlossener Mac ist keine Bordversorgung; beim
+  spaeteren Download keine ungeregelten Versorgungsquellen parallel verbinden.
+- IMU, RC, Servoausgaben, GPS, Barometer und Iterationszeiten auf gemeinsamer
+  Zeitbasis aufzeichnen. Datenalter und Fehlerkontext mit speichern.
+- Ganze Fluege abdecken: jetzige 200-Zeilen-Ringe reichen nicht. Gewuenschte
+  Flugdauer/Rate und Speicherweg festlegen. Ein erster Entwurf fuer kurze
+  Datenfluege kann ein gepackter RAM-Puffer mit 600 Samples bei 1 Hz fuer 10 min
+  sein, ergaenzt um Zeit-/Fehleraggregate jeder Iteration. RAM-Reserve auf dem
+  konkreten MCU pruefen; nicht automatisch eine Speicherkarte voraussetzen.
+  Das ist ein Implementierungsplan, noch keine vorhandene Funktion.
+  Flashzugriffe bleiben aus der
+  aktiven Regelschleife ausgeschlossen; Speicherloesung bewusst implementieren.
+- Verhalten der gesamten MANUAL-Integration zuerst am Boden pruefen, einschliesslich
+  Mehrlast, fehlender Sensorwerte und sauberem Start/Stop. Sensorstoerung darf
+  nicht aus Versehen die manuelle Steuerung durch einen blockierenden neuen
+  Programmteil aufhalten. Blockaden des bestehenden MCU-Pfads bleiben ein Risiko.
 
-## 3. Git: Ergebnisse sichern, dann Codearbeit abtrennen
+Danach die geplanten manuellen Datenfluege beurteilen und durchfuehren, Daten
+sichern, Empfang/Barometer/Timing vergleichen und den naechsten Umfang festlegen.
+Das ist eine Entwicklungsempfehlung, keine Zusage, dass Hardware nicht ausfaellt.
 
-Aktuell: codex/bench-fault-validation, Quellcommit 4a1f889; derselbe Commit liegt
-auf origin/codex/bench-fault-validation. f66ccd1 schloss die erste Achsenphase ab.
-main liegt noch beim aelteren Stand 57a5ed2 und enthaelt diese Arbeit nicht.
+## 4. Timing/Faults parallel und anhand der Daten bearbeiten
 
-**Empfehlung, hier noch nicht ausgefuehrt:**
+Die 100-Hz-Zielrate ist kein Naturgesetz. Eine andere Regelrate kann sinnvoll
+sein, braucht aber eine bewusste Auslegung und Bewertung. Schwellen nicht nur
+veraendern, um Warnungen verschwinden zu lassen. Weder 75 Hz allein noch das
+Ausbleiben eines 50-ms-Faults beweisen gute oder schlechte Flugregelung.
 
-1. Jetzt Testauswertung, Rohdaten und korrigierte Bedien-/Projektunterlagen
-   gemeinsam auf dem aktuellen Branch committen. Ein Commit mit ehrlich
-   dokumentierten offenen Befunden ist sinnvoll; T4 muss dafuer nicht bestanden
-   sein. Die .gitignore-Ausnahmen erfassen nur die vier ausgewaehlten T5-/T6-
-   Dateien; sonst wuerden deren bench_-Namen beim normalen git add fehlen.
-2. Danach fuer die oben abgegrenzte Codearbeit codex/timing-fault-diagnostics
-   **vom neuen Ergebniscommit** erstellen. So bleiben Messbasis und folgende
-   Implementierung vergleichbar. Nicht vom alten main abzweigen.
-3. main zunaechst unveraendert lassen; kein Flug-Release-Tag. Push ist eine
-   separate Sicherung nach Review, kein MCU-Upload. Ein spaeterer Merge kann
-   bewusst einen Bodenversuchsstand mit offenen Punkten enthalten.
+Naechste sinnvolle Diagnoseergaenzungen bei MANUAL-Integration:
 
-Beispiel nach Pruefung aller angezeigten Dateien:
+- Laufzeiten fuer IMU/Filter, RX, Regler, PWM, Zusatzsensoren und Diagnose aufteilen.
+  Messaufwand mit erfassen, keine Print-/Flashausgabe pro Iteration.
+- Ersten Automatikfault mit Phase, Typ und begrenztem Exceptiontext exportieren;
+  der erste T1-IMU_RUNTIME laesst sich aus seinem Faultcode allein nicht erklaeren.
+- RX-Verwerfungen nach ungueltigem Puls, FIFO und Pollpause unterscheiden.
+- Nach Messung gezielt Allokationen/Formatierung/Puffer/Mathematik verbessern.
+  Die [MicroPython-Dokumentation](https://docs.micropython.org/en/v1.29.0/reference/speed_python.html)
+  beschreibt diese Reihenfolge. GC ist hier eine Hypothese, keine bewiesene Ursache.
 
-```sh
-git status
-git diff
-git add .gitignore AGENTS.md README.md docs
-git diff --staged
-git commit -m "Tischtestergebnisse und offene Befunde dokumentieren"
-git switch -c codex/timing-fault-diagnostics
-```
+Vergleichsmessungen mit gleichen Einstellungen sichern; keine alten Fehlerdaten
+ersetzen. Drei 60-s-Laeufe sind ein sinnvoller Reproduzierbarkeitsvergleich,
+keine garantierte Worst-Case-Grenze. Die 120 Hosttests pruefen Logik, keine
+realen Ausfuehrungszeiten. T4, Versorgung und Receiver-Failsafe bleiben offen;
+[Sicherungs-/Versorgungsbefunde](VERSORGUNG_WARNHINWEISE.md) weiter mitfuehren.
 
-## 4. Weitere Prioritaeten bis zum Thermikkreisen
+## 5. Danach ein autonomer Kreis als eigener kleiner Umfang
 
-1. **Versorgung und unabhaengiger Rueckweg:** BEC 5 V @ 3 A fuer vier Servos,
-   gemeinsame Masse, Pegel, USB-Stromverlust und Receiver-Failsafe qualifizieren.
-   Stromleiste allein belegt keine Stromreserve. Modelle/Schaltplan erfassen,
-   dann Receiver-zu-Servo-Umschaltung planen, die auch ohne funktionierenden MCU
-   wirkt. Signalausgaenge nicht parallel verbinden. T4 ersetzt diesen Bypass nicht.
-   [Versorgungsbefunde](VERSORGUNG_WARNHINWEISE.md) bleiben offen.
-2. **Kontrollierte Fehlerqualifikation:** T4 und gemessene Reaktionszeiten
-   nachholen, wenn ein geeigneter Testaufbau vorhanden ist. Hang-/Resetverhalten
-   und Sensor-Busblockaden untersuchen. Ein Watchdog ersetzt keinen unabhaengigen
-   manuellen Weg; keine riskanten Kurzschluesse zur Fehlereinspritzung.
-3. **Dynamik/Simulation:** Flugzeugdynamik, kombinierte Achsen, Aktuatorgrenzen
-   und koordinierte Kurven. Null-Gierrate ist keine fertige Kurvenkoordination.
-   Vor I-Anteil Trim-/Anti-Windup-Integration beheben. Tischbewegungen sind keine
-   Flug-Gainabstimmung; Flugversuche erst nach den offenen Systemnachweisen.
-4. **Zustand/Energie/Navigation:** Airspeed, Hoehe/Vario und Position, danach
-   Energie-/Geschwindigkeitsregelung, Navigation, zuletzt Thermikerkennung und
-   Zentrierung. Nickwinkelhaltung ist keine Hoehen-/Stallregelung.
-   [ARCHITEKTUR.md](ARCHITEKTUR.md) beschreibt den groesseren Zusammenhang.
+GPS und Barometer liefern Messwerte. Fuer einen autonomen Kreis braucht es
+zusaetzlich gepruefte Positions-/Kursgueltigkeit, Kreisfuehrung und Roll-Sollwerte,
+Nick-/Geschwindigkeitsstrategie, Grenzen und klare Aktivierung/Uebernahme.
+GPS-Kurs ist kein Kompass und Groundspeed keine Airspeed. Null-Gierrate ist
+keine automatische Kurvenkoordination. Diese Funktionen werden nach der
+Datenauswertung schrittweise ergaenzt; perfekte Thermiknavigation ist dafuer
+nicht vorab noetig. Einen fertigen Kreisregler gibt es im jetzigen Code nicht.
+
+## Git fuer den laufenden Schritt
+
+Auf codex/gps-baro-bringup bleiben, S1/S2/S3 ausfuehren und protokollieren.
+Der Vorbereitungsstand ist hostgeprueft; physische Ergebnisse werden spaeter
+in einem getrennten Ergebniscommit gesichert.
+Der alte Tischtestbranch bleibt die Vergleichsbasis. Erst fuer die nachfolgende
+MANUAL-Loggerintegration bei Bedarf vom dann passenden Commit einen eigenen
+Branch anlegen. Kein automatischer Merge/Push/Flug-Release-Tag.

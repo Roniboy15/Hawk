@@ -7,7 +7,8 @@ Das Projekt bereitet die Architektur fuer autonomes Thermikkreisen vor.
 Diese Version implementiert Sensoranzeige, manuellen Durchgang, Roll-/Nick-
 Winkelregelung und optional Gier-Drehratenregelung, aber keine Flugnavigation.
 
-**Nur beaufsichtigte Tischtests; noch keine Flugfreigabe.** Der Segler hat
+**Aktuell: Sensorfunktionstests und Vorbereitung manueller Datenfluege;
+autonome Flugfunktion ist noch nicht implementiert.** Der Segler hat
 kein Triebwerk und kein Gas. Laut Besitzer sind alle Servos montiert und an
 den vorgesehenen Kanaelen angeschlossen; Signalpegel und Ruderwirkungen
 muessen trotzdem gemessen/geprueft werden. Eine gemeinsame Stromleiste ist geplant.
@@ -19,23 +20,29 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 
 ## Start hier
 
-**Aktueller Schritt:** [FEHLER_TISCHTEST.md](docs/FEHLER_TISCHTEST.md) gibt die
-konkreten T1–T6-Ablaeufe und Thonny-Aufrufe vor. Mit
-[TESTPROTOKOLL_FEHLER.md](docs/TESTPROTOKOLL_FEHLER.md) Ergebnisse erfassen.
+**Aktueller Schritt:** [SENSOREN_TEST.md](docs/SENSOREN_TEST.md): BN-180 und
+GY-63/MS5611 einzeln pruefen, dann gemeinsam. sensor_test.run('baro'/'gps'/'both')
+startet nur diesen separaten Funktionstest, ohne Servo-PWM. GPS-Pinfolge und
+Signalpegel vor dem Anschluss abgleichen. Die Firmware enthaelt noch keinen
+gemeinsamen MANUAL-Fluglogger oder Kreisregler. Der Besitzer moechte danach den
+bisherigen MCU-MANUAL-Durchgang nutzen und akzeptiert die MCU-Abhaengigkeit;
+Timing wird parallel weiter untersucht, ohne pauschale 100-Hz-Einstiegshuerde.
+
+Vorherige [Fehler-/Timingtests T1–T6](docs/FEHLER_TISCHTEST.md):
 T1-Wiederholung, T2 und T3 sind funktional bestaetigt. T5/T6 liefen laut Besitzer
 wie erwartet; die Daten bestaetigen Stabilisierung und PITCH_RANGE-Verriegelung.
 T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
 herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
 T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
-Stromverlust bleiben offen. Naechster Codeumfang: Laufzeiten aufschluesseln und
-Faultdetails sichern.
+Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert; aktueller
+Branch codex/gps-baro-bringup. Neue Sensoren sind noch nicht physisch bestaetigt.
 [Aktuelle Auswertung](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md),
 [Vorgaengerbefunde T1/T2](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
 
 1. [TESTBERICHT_2026-10-13.md](docs/TESTBERICHT_2026-10-13.md): abgeschlossener
    Achsen-Funktionstest, Logauswertung und Grenzen des Nachweises.
-2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): konkreter Diagnoseumfang,
-   Abnahmekriterien und Git-Abschluss; danach Rueckfallebene und Simulation.
+2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): Sensorchecks, anschliessend
+   MANUAL-Datenlogger, Datenbewertung und spaetere Kreisfuehrung.
 3. [THONNY.md](docs/THONNY.md): Dateien hochladen, kalibrieren, Achsentests wiederholen.
 4. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
 5. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
@@ -87,6 +94,9 @@ er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder
 | outputs.py | Servopulse, Vorzeichen, Trim und Grenzwerte |
 | logger.py | Begrenzter RAM-Ring, CSV-Export nach dem Stoppen |
 | diagnostics.py | Zeitstatistik/Zustandsring, JSON-Laufbericht nach dem Stoppen |
+| gps.py | Begrenzter NMEA-Empfang mit Pruefsumme, Fixstatus und Datenalter |
+| ms5611.py | PROM-CRC, Druck-/Temperaturkompensation, ADC-Zustandsfolge |
+| sensor_test.py | Separater GPS-/Barometertest und begrenzter CSV-/JSON-Export |
 
 Alle Python-Dateien enthalten am Anfang Aufgabe, Hauptfunktionen und Logik.
 Tests und Dokumentation gehoeren auf den Mac, nicht auf den MCU.

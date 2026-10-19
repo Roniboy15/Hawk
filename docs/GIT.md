@@ -2,7 +2,7 @@
 
 Die einmalige Einrichtung unten beschreibt das urspruengliche Paket; im
 vorhandenen Repository nicht erneut klonen oder origin entfernen. Aktuelle Arbeit:
-codex/bench-fault-validation, Remote-Tracking vorhanden, Details im Abschlussstand.
+codex/gps-baro-bringup, Details im Abschlussstand.
 
 Das urspruengliche Paket enthaelt den Code und repository.bundle mit dem vorbereiteten
 lokalen Git-Repository/Startcommit. Damals wurde kein GitHub-Repository angelegt
@@ -70,18 +70,18 @@ Dieser Segler hat kein Triebwerk.
 
 ### Aktueller Abschlussstand (2026-10-18)
 
-Der Achsenabschluss f66ccd1 und Diagnosecode 4a1f889 sind committed. Aktuelle
-Arbeit liegt auf `codex/bench-fault-validation`; origin zeigt auf denselben
-Quellcommit. Die neuen Tischtestergebnisse und korrigierten Unterlagen sind noch
-nicht committed. T3/T5/T6 funktional bestaetigt, T4 bewusst offen; Timing bleibt
-ein Befund. T6-Gierverlust ist laut Besitzer durch einen herausgefallenen Stecker
-erklaert. Ein Ergebniscommit muss keine Flugfreigabe behaupten.
+Der Tischteststand ist auf Besitzerwunsch als **913a9e6** auf
+codex/bench-fault-validation committed. Danach wurde **codex/gps-baro-bringup**
+von genau diesem Commit angelegt. main und Remotes wurden dabei nicht veraendert.
+T3/T5/T6 funktional bestaetigt, T4 offen; Timing bleibt ein Befund.
 
-Empfehlung: diese Unterlagen mit ausgewaehlten Rohdaten jetzt gemeinsam committen,
-dann fuer den neuen Codeumfang `codex/timing-fault-diagnostics` **vom neuen
-Ergebniscommit** abzweigen. main ist aelter und bleibt zunaechst unveraendert.
-Ein Commit braucht keinen weiteren Servotest, da hier keine Firmware geaendert
-wurde. Befehle und Abnahme: [NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md).
+Die neue Sensorimplementierung wird auf Besitzerwunsch als eigener
+Vorbereitungscommit gesichert: 120 Hosttests bestanden, Hardwarepruefung noch
+offen. Als naechstes S1/S2/S3 aus [SENSOREN_TEST.md](SENSOREN_TEST.md)
+ausfuehren und Sensorergebnisse gesondert sichern. Fuer diesen laufenden Schritt
+auf demselben Branch bleiben;
+die spaetere MANUAL-Loggerintegration ist ein eigener Umfang. Kein automatischer
+Merge, Push oder Flug-Release-Tag.
 
 Staging ist die Auswahl des naechsten Commitinhalts: `git add` erfasst auch
 Aenderungen an bestehenden Dateien und Loeschungen. `git diff --staged` zeigt

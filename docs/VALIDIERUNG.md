@@ -1,7 +1,8 @@
 # Validierung — v0.2.3-bench
 
-Letzter Hostlauf am 2026-10-18: 94 automatische Tests bestanden, CPython 3.9.6.
-Alle 15 Firmwaredateien und der Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
+Letzter Hostlauf am 2026-10-18: 120 automatische Tests bestanden, CPython 3.9.6
+(94 bestehende Steuerungstests und 26 neue Sensortests).
+Alle 18 Firmwaredateien und der Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
 ```sh
@@ -130,8 +131,35 @@ kein weiter ungeklaerter Empfangsfehler. Verbindung vor Wiederholungen sichern.
 Die zusaetzliche Folge ersetzt nicht den vorbereiteten T4-Verlust-/Wiederfreigabetest.
 Auswertung, Originalpaare und Fingerprints:
 [T3/T5/T6](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md).
-Naechster Codeumfang: getrennte Laufzeit-/RX-Diagnose und persistente Faultdetails;
+Die danach geaenderte Projektprioritaet ist Sensorfunktion und anschliessend
+MANUAL-Datenerfassung. Timing-/Faultdiagnose bleibt offen und wird fortgesetzt;
 Reglerwerte bleiben unveraendert. Erster T1-IMU_RUNTIME bleibt ungeklärt.
+
+## GPS-/Barometer-Vorbereitung, 2026-10-18
+
+Tischtestabschluss 913a9e6, neuer Branch codex/gps-baro-bringup. Der Besitzer
+akzeptiert den fehlenden unabhaengigen manuellen Rueckweg fuer seine geplanten
+MANUAL-Datenfluege durch den MCU. Das ist keine Verifikation der Ausfallsicherheit.
+Neue Sensoren werden zuerst separat ohne app/PWM geprueft; noch keine echten
+GPS-/Barometer-Messdateien oder Flugnachweise vorhanden.
+
+26 neue Hosttests pruefen:
+
+- NMEA-Pruefsumme, geteilte Datenpakete, mehrere Talker, Koordinaten/Vorzeichen,
+  Einheiten, No-Fix, Zeitablauf, abweichende UTC-Epochen, Kurs im Stillstand,
+  ungueltige Felder und begrenzte UART-/Rahmenverarbeitung.
+- MS5611-Datenblattvektor 100009 Pa / 20.07 C, CRC-Testvektor aus AN520,
+  korruptes PROM, zweite Temperaturordnung, Messbereich, verzoegerte ADC-Abfrage,
+  volle Wandlungswartezeit auch nach langsamem Busbefehl,
+  Tick-Umlauf, mehrdeutige Adressen und relative Hoehenrichtung.
+- Import ohne Hardware, Konflikte mit bestehenden GPIOs, Ctrl+C, UART-Cleanup
+  auch nach Teilstart, verriegelte Sensorfehler, CSV-/JSON-Export nach Stop und
+  Vermeidung des Ueberschreibens frueherer Laeufe.
+
+Diese Tests bestaetigen weder Kabelfarben/Signalpegel noch die echte GY-63-
+Platinenbeschaltung, GPS-Genauigkeit oder eine 100-Hz-Steuerung mit Zusatzsensoren.
+Sensorstarter-Timing ist kein MANUAL-Regelkreistiming. Konkrete Tests und Grenzen:
+[SENSOREN_TEST.md](SENSOREN_TEST.md).
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 

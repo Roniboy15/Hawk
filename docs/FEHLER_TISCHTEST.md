@@ -16,6 +16,10 @@ Details: [aktuelle Auswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T
 
 ## Einmal vorbereiten
 
+Aktuelle Projektprioritaet nach Tischtestcommit 913a9e6 ist die separate
+[GPS-/Barometerpruefung S1/S2/S3](SENSOREN_TEST.md). T1–T6 bleiben die Anleitung
+fuer spaetere Vergleichs-/Fehlerpruefungen. T4 wird dadurch nicht als erledigt markiert.
+
 1. Bisherige MCU-Dateien und calibration.json in einem eigenen Mac-Ordner sichern.
    Die Kalibrierung nicht neu erfassen, solange Montage/Sender unveraendert sind.
 2. Laufende Regelung stoppen. Bei Verkabelungsaenderungen USB und BEC/Batterie
