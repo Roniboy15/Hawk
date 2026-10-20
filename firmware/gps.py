@@ -143,7 +143,8 @@ class GPS:
         self.gga_ms, self.rmc_ms, self.last_poll = None, None, None
         self.counters = dict((key, 0) for key in
                              ('bytes', 'sentences', 'checksum_errors', 'parse_errors',
-                              'ignored', 'overlong', 'resyncs', 'poll_gaps', 'updates'))
+                              'ignored', 'overlong', 'resyncs', 'poll_gaps', 'updates',
+                              'gga_fix_sentences', 'rmc_fix_sentences', 'max_satellites_used'))
         self.first_sentences = []  # Hoechstens vier Rohsaetze fuer Baud-/No-Fix-Diagnose.
 
     def _count(self, key, amount=1):
@@ -180,9 +181,16 @@ class GPS:
                 elif record['kind'] == 'GGA':
                     self.gga, self.gga_ms = record, now_ms
                     self._count('updates')
+                    # Empfangenen Receiverstatus auch nach Frischeverlust nachweisen.
+                    self.counters['max_satellites_used'] = max(
+                        self.counters['max_satellites_used'], record['satellites'])
+                    if record['valid']:
+                        self._count('gga_fix_sentences')
                 else:
                     self.rmc, self.rmc_ms = record, now_ms
                     self._count('updates')
+                    if record['valid']:
+                        self._count('rmc_fix_sentences')
                 continue
             if self.length == len(self.buffer):
                 self.receiving = False
@@ -198,14 +206,20 @@ class GPS:
             if gap < 0 or gap > self.max_poll_ms:
                 self.gga = self.rmc = self.gga_ms = self.rmc_ms = None
                 self.receiving, self.length = False, 0
-                if self.uart.any():
-                    self.uart.read(self.rxbuf)  # Fester Maximalumfang, kein endloses Leeren.
+                available = self.uart.any()
+                if available:
+                    # Auch beim Verwerfen nur schon vorhandene Bytes anfordern.
+                    self.uart.read(min(available, self.rxbuf))
                 self._count('poll_gaps')
                 self.last_poll = now_ms
                 return
         self.last_poll = now_ms
-        if self.uart.any():
-            data = self.uart.read(self.max_read)
+        available = self.uart.any()
+        if available:
+            # RP2 erzwingt einen Zeichen-Timeout, selbst bei timeout_char=0.
+            # read(256) kann deshalb einen laufenden 9600-Baud-Burst abwarten.
+            # any() liefert vorhandene Bytes: nicht auf kuenftige Zeichen warten.
+            data = self.uart.read(min(available, self.max_read))
             if data:
                 self.feed(data, now_ms)
 

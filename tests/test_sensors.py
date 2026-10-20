@@ -103,6 +103,33 @@ class FakeClock:
         self.us += value
 
 
+class ArrivingUART:
+    """9600-Baud-Stream: ein zu grosser read wartet auf kuenftige Zeichen.
+
+    Modelliert den RP2-Zeichenabstand auch bei timeout=0. Keine echte Wartezeit
+    und keine Hardware: nur die Testuhr rueckt waehrend eines solchen reads vor.
+    """
+    def __init__(self, clock, stream):
+        self.clock, self.stream = clock, stream
+        self.offset = 0
+        self.read_sizes = []
+
+    def any(self):
+        received = min(len(self.stream), self.clock.us // 1042 + 1)
+        return max(0, received - self.offset)
+
+    def read(self, length):
+        self.read_sizes.append(length)
+        end = min(len(self.stream), self.offset + length)
+        if length > self.any():
+            self.clock.us = max(self.clock.us, (end - 1) * 1042)
+            if end - self.offset < length:
+                self.clock.us += 3000  # RP2: mindestens 2 ms Zeichen-Timeout.
+        result = self.stream[self.offset:end]
+        self.offset = end
+        return result or None
+
+
 class GPSParsingTests(unittest.TestCase):
     def receiver(self):
         return GPS(FakeUART(), diff)
@@ -199,7 +226,7 @@ class GPSParsingTests(unittest.TestCase):
         gps.poll(101)
         self.assertFalse(gps.snapshot(101)['valid'])
         self.assertEqual(gps.counters['poll_gaps'], 1)
-        self.assertEqual(uart.read_sizes[-1], 1024)
+        self.assertEqual(uart.read_sizes[-1], len(GGA + RMC))
         uart.data = GGA + RMC
         gps.poll(111)
         self.assertTrue(gps.snapshot(111)['valid'])
@@ -210,6 +237,46 @@ class GPSParsingTests(unittest.TestCase):
         gps.poll(0)
         self.assertEqual(uart.read_sizes, [64])
         self.assertEqual(len(uart.data), 936)
+
+    def test_serial_burst_does_not_make_poll_wait_or_erase_a_valid_pair(self):
+        clock = FakeClock()
+        uart = ArrivingUART(clock, GGA + RMC + b'x' * 1024)
+        gps = GPS(uart, diff)
+        for _ in range(30):
+            before = clock.us
+            gps.poll(clock.ticks_ms())
+            self.assertEqual(clock.us, before, 'poll waited for future UART bytes')
+            clock.sleep_ms(10)
+        self.assertTrue(gps.snapshot(clock.ticks_ms())['valid'])
+        self.assertEqual(gps.counters['poll_gaps'], 0)
+
+    def test_poll_gap_discard_does_not_wait_for_future_serial_bytes(self):
+        clock = FakeClock()
+        uart = ArrivingUART(clock, (GGA + RMC) * 20)
+        gps = GPS(uart, diff)
+        gps.feed(GGA + RMC, 0)
+        gps.last_poll = 0
+        clock.sleep_ms(110)
+        before = clock.us
+        gps.poll(clock.ticks_ms())
+        self.assertEqual(clock.us, before, 'backlog discard waited for future bytes')
+        self.assertFalse(gps.snapshot(clock.ticks_ms())['valid'])
+        self.assertEqual(gps.counters['poll_gaps'], 1)
+
+    def test_receiver_fix_evidence_survives_freshness_reset(self):
+        gps = self.receiver()
+        gps.feed(sentence('GNGGA,123519.00,,,,,0,00,99.99,,,,,,'), 0)
+        gps.feed(sentence('GNRMC,123519.00,V,,,,,,,191026,,,N'), 0)
+        self.assertEqual(gps.counters['gga_fix_sentences'], 0)
+        self.assertEqual(gps.counters['rmc_fix_sentences'], 0)
+        self.assertEqual(gps.counters['max_satellites_used'], 0)
+        gps.feed(GGA + RMC, 10)
+        gps.poll(10)
+        gps.poll(111)
+        self.assertFalse(gps.snapshot(111)['valid'])
+        self.assertEqual(gps.counters['gga_fix_sentences'], 1)
+        self.assertEqual(gps.counters['rmc_fix_sentences'], 1)
+        self.assertEqual(gps.counters['max_satellites_used'], 8)
 
 
 class BarometerTests(unittest.TestCase):
@@ -294,6 +361,56 @@ class BarometerTests(unittest.TestCase):
                 relative_altitude(value, 100000)
 
 
+class SensorLogTests(unittest.TestCase):
+    @staticmethod
+    def empty_baro():
+        return {'valid': False, 'age_ms': -1, 'pressure_pa': None,
+                'temperature_c': None, 'relative_height_m': None, 'd1': None, 'd2': None}
+
+    def test_packed_roundtrip_preserves_coordinates_flags_and_missing_values(self):
+        log = sensor_test.SensorLog(2)
+        log.append_sample(0, {}, self.empty_baro(), 0)
+        gps = GPS(FakeUART(), diff)
+        gps.feed(GGA + RMC, 0)
+        baro = {'valid': True, 'age_ms': 5, 'pressure_pa': 100009,
+                'temperature_c': 20.07, 'relative_height_m': None,
+                'd1': 9085466, 'd2': 8569150}
+        log.append_sample(501, gps.snapshot(10), baro, 10010)
+        rows = list(csv.DictReader(io.StringIO(log.HEADER + ''.join(log.ordered()))))
+        self.assertEqual(rows[0]['lat_deg'], '')
+        self.assertEqual(rows[0]['pressure_pa'], '')
+        self.assertEqual(rows[0]['gga_age_ms'], '-1')
+        self.assertEqual(rows[1]['lat_deg'], '48.1173000')
+        self.assertEqual(rows[1]['lon_deg'], '11.5166667')
+        self.assertEqual(rows[1]['utc'], '123519.000')
+        self.assertEqual(rows[1]['date'], '181026')
+        self.assertEqual(rows[1]['course_usable'], '1')
+        self.assertEqual(rows[1]['baro_valid'], '1')
+        self.assertEqual(rows[1]['pressure_pa'], '100009')
+        self.assertEqual(rows[1]['temperature_c'], '20.07')
+        self.assertEqual(rows[1]['relative_height_m'], '')
+        self.assertEqual(rows[1]['d1'], '9085466')
+        self.assertEqual(rows[1]['period_us'], '10010')
+
+    def test_midnight_date_and_leap_second_survive_packing(self):
+        log = sensor_test.SensorLog(2)
+        for index, utc in enumerate(('000000.00', '235960.25')):
+            log.append_sample(index, {'utc': utc, 'date': '010100'}, self.empty_baro(), 0)
+        rows = list(csv.DictReader(io.StringIO(log.HEADER + ''.join(log.ordered()))))
+        self.assertEqual([r['utc'] for r in rows], ['000000.000', '235960.250'])
+        self.assertEqual([r['date'] for r in rows], ['010100', '010100'])
+
+    def test_full_buffer_raises_without_overwriting_earlier_samples(self):
+        log = sensor_test.SensorLog(2)
+        for ms in (0, 500):
+            log.append_sample(ms, {}, self.empty_baro(), 0)
+        with self.assertRaises(RuntimeError):
+            log.append_sample(1000, {}, self.empty_baro(), 0)
+        rows = list(csv.DictReader(io.StringIO(log.HEADER + ''.join(log.ordered()))))
+        self.assertEqual([r['ms'] for r in rows], ['0', '500'])
+        self.assertEqual((log.total, log.count), (3, 2))
+
+
 class SensorRunnerTests(unittest.TestCase):
     def devices(self, profile, clock, resources):
         self.uart = FakeUART(GGA + RMC)
@@ -343,7 +460,40 @@ class SensorRunnerTests(unittest.TestCase):
             self.assertTrue(rows)
             self.assertNotIn(None, rows[0])
             self.assertEqual(rows[-1]['relative_height_m'], '0.00')
-            self.assertEqual(json.loads(Path(stem + '.json').read_text())['schema'], 1)
+            self.assertEqual(json.loads(Path(stem + '.json').read_text())['schema'], 2)
+
+    def test_three_minute_run_retains_beginning_and_end(self):
+        with tempfile.TemporaryDirectory() as directory:
+            stem = str(Path(directory) / 'whole_run')
+            with patch.object(sensor_test, '_devices', side_effect=self.devices), \
+                    patch.object(sensor_test, '_free_stem', return_value=stem), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                report = sensor_test._run('both', 180, True, FakeClock())
+            rows = list(csv.DictReader(io.StringIO(Path(stem + '.csv').read_text())))
+            self.assertGreater(len(rows), 200)
+            self.assertLess(int(rows[0]['ms']), 1000)
+            self.assertGreater(int(rows[-1]['ms']), 179000)
+            self.assertEqual(report['csv_rows_total'], len(rows))
+            self.assertEqual(report['csv_rows_retained'], len(rows))
+            self.assertTrue(report['log']['all_samples_retained'])
+            self.assertLess(report['log']['allocated_bytes'], 65536)
+            self.assertTrue(self.uart.closed)
+
+    def test_log_size_limit_rejects_before_hardware_start(self):
+        with patch.dict(config.SENSOR_TEST, {'max_log_bytes': 1}), \
+                patch.object(sensor_test, '_devices') as factory:
+            with self.assertRaises(ValueError):
+                sensor_test.run('gps', duration_s=180)
+            factory.assert_not_called()
+            self.assertFalse(sensor_test._running)
+
+    def test_low_mcu_memory_rejects_before_hardware_start(self):
+        with patch.object(sensor_test.gc, 'mem_free', return_value=0, create=True), \
+                patch.object(sensor_test, '_devices') as factory:
+            with self.assertRaises(MemoryError):
+                sensor_test.run('gps', duration_s=180)
+            factory.assert_not_called()
+            self.assertFalse(sensor_test._running)
 
     def test_partial_start_closes_uart_and_keeps_original_error(self):
         uart = FakeUART()

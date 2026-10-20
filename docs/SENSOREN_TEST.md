@@ -1,6 +1,6 @@
 # BN-180 und GY-63/MS5611 zuerst pruefen
 
-Stand 2026-10-18, Branch codex/gps-baro-bringup ab Tischtestcommit 913a9e6.
+Stand 2026-10-20, Branch codex/gps-baro-bringup ab Tischtestcommit 913a9e6.
 Ziel dieses Schritts: Daten empfangen, Gueltigkeit/Einheiten pruefen und am Boden
 vergleichen. Noch keine GPS-Regelung, Hoehenhaltung oder autonome Kreisfunktion.
 Der Besitzer moechte anschliessend mit dem bisherigen MCU-MANUAL-Durchgang
@@ -21,6 +21,12 @@ Versorgung mit 5 V. Die Herstellerseite nennt 3.6..5.5 V; die vom Besitzer
 gelieferte Beschreibung nennt 3.0..5.5 V. Fuer den ersten Test 5 V verwenden.
 Damit ist die Zuordnung der tatsaechlichen Kabel noch nicht bewiesen.
 
+Nachtrag 2026-10-19: Besitzer bestaetigt fuer sein konkretes BN-180 **weiss =
+GPS-TX-Ausgang** laut Beschreibung. Ein erster Aussenlauf liefert gueltige
+NMEA-Saetze bei 9600 Baud. Andere Farben/Steckerbelegung nicht daraus ableiten;
+TX-Spannungspegel ist damit nicht gemessen. Positionsnachweis ist inzwischen
+mit gps_2 und S3 funktional erbracht; Historie und Softwarekorrektur unten bei S2.
+
 **Vor dem Anschliessen des GPS muessen VCC/GND/TX/RX eindeutig zugeordnet sein.**
 Keine Kabelfarbe oder Steckeransicht raten. TTL ist keine verbindliche Zusage
 fuer 3.3-V-Pegel; GPIO vertraegt keine direkte RS-232-Verbindung. Anschlussplan
@@ -33,6 +39,17 @@ Zuerst laufende Programme stoppen und USB sowie BEC/Batterie trennen.
 **BEC/Servobatterie bleibt fuer diese Sensortests aus.** Anschliessend nur MCU
 und Sensoren per USB versorgen. Bestehende IMU-/Servo-/Receiverpins bleiben erhalten.
 GP sind GPIO-Nummern, nicht die physischen Pinpositionen.
+
+**Nachtrag USB-Startbefund 2026-10-19:** Bei bereits versorgtem BEC schlugen
+laut Besitzer Hoehen-/Seitenruder beim USB-Anstecken aus. Die bisherige IMU war
+ohne Versorgung, SDA/SCL/GND aber angeschlossen. Fuer diesen Sensorstarter
+bleiben BEC/Empfaenger/Servos deshalb wie vorgesehen aus. Keine Servo-PWM
+bedeutet keine laufenden Neutralpulse; versorgte Servos sind damit nicht
+automatisch gegen Bewegung abgesichert. IMU normal mitversorgen oder bei
+getrennten Quellen vollstaendig abstecken, nicht nur VCC entfernen. IMU und
+GY-63 koennen 3V3/GND teilen; ihre I2C-Busse bleiben getrennt. Nicht davon
+ausgehen, dass unversorgte Baugruppen angeschlossene aktive Signale vertragen.
+Details und offene Ursachen: [Versorgungsbefund](VERSORGUNG_WARNHINWEISE.md).
 
 | Modulanschluss | MCU / Verbindung | Bemerkung |
 | --- | --- | --- |
@@ -96,6 +113,21 @@ Jitter/Drift notieren; diese Anzeige ist noch kein kalibriertes Thermikvario.
 
 ## S2 — GPS draussen, 180 Sekunden
 
+**S2 funktional bestanden am 2026-10-20:** gps_2 zeigt Fix nach 74.820 s,
+keine Pollpausen, keine Pruefsummen-/Parserfehler und plausible Gehbewegung.
+Der nachgereichte Konsolenauszug zeigt Hinweg mit West-/Suedanteil und
+Rueckweg mit Ost-/Nordanteil. Absolute Genauigkeit ist nicht vermessen.
+S3 ist inzwischen ebenfalls funktional bestanden; keine S2-Wiederholung allein
+wegen des alten Ringpuffers.
+[gps_2-Auswertung und Wegdiagramm](testdaten/gps_tests/AUSWERTUNG_GPS_2.md).
+
+Der erste Lauf hatte keinen aufgezeichneten Fix und 314 Pollpausen. Seit 0.1.1
+fordert der Empfangscode nur schon vorhandene UART-Bytes an. gps_2 enthaelt
+die neuen Zaehler, meldet aber noch Version 0.1.0: vor S3 alle sechs Module
+konsistent aktualisieren, calibration.json erhalten, Soft-Reboot. **Aktueller
+Sensorstarter: 0.2.0 mit vollstaendigem RAM-Log.** Folgende S2-Anleitung bleibt
+fuer spaetere Wiederholungen erhalten.
+
 Erst Kabel-/Pegelzuordnung klaeren und spannungsfrei anschliessen. Dann unter
 freiem Himmel mit Antennenoberseite nach oben, Modell/GPS zunaechst ruhig halten:
 
@@ -110,6 +142,11 @@ sind dann richtig; sie duerfen nicht als Position 0/0 ausgegeben werden.
 
 1. Im JSON gps_counters.sentences/updates pruefen. Beide sollen ansteigen;
    wiederholte checksum_errors deuten auf Baud-/Leitungs-/Pegelfehler hin.
+   Ab 0.1.1 zeigen gga_fix_sentences/rmc_fix_sentences, ob jemals gueltige
+   einzelne Fixsaetze empfangen wurden; max_satellites_used ist das Maximum
+   benutzter Satelliten aus GGA. Das sind Laufzaehler, kein aktueller Fix.
+   Viele poll_gaps koennen die Beobachtung trotz sauberem Datenstrom zerstoeren;
+   errors={} allein bestaetigt weder Fix noch ausreichend kurze Pollzeiten.
 2. Auf fix=1 warten: frische gueltige GGA/RMC derselben UTC-Epoche. Position
    mit dem bekannten Standort/Karte vergleichen. Satelliten und HDOP mitnotieren;
    HDOP ist keine zugesicherte Genauigkeit in Metern.
@@ -130,7 +167,18 @@ bei Bytes ohne gueltige Saetze Baudrate/Pegel abgleichen, nicht wahllos umstecke
 
 ## S3 — Gemeinsam, 180 Sekunden
 
-Nach S1/S2 beide Sensoren anschliessen und denselben Aussenversuch wiederholen:
+**S3 funktional bestanden am 2026-10-20:** 172.972 s, vom Besitzer mit Ctrl+C
+beendet, gemeinsamer Betrieb ohne protokollierte Sensorfehler/Pollpausen.
+Der Lauf meldet noch 0.1.0 / Schema 1: nur letzte 40.963 s im 200-Zeilen-Ring.
+Die neue 0.2.0-Vollaufzeichnung ist damit noch nicht physisch validiert.
+Hoehenspruenge trotz ebenem Wegabschnitt im finalen Einbau weiter pruefen.
+[Auswertung und Nachweisgrenzen](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
+Die folgende Anleitung gilt fuer einen neuen Bodenlauf, nicht rueckwirkend fuer
+die gespeicherten alten Dateien.
+
+Nach S1/S2 beide Sensoren anschliessen und denselben Aussenversuch wiederholen.
+Vorher sechs Module aktualisieren, Soft-Reboot und Version **0.2.0** pruefen.
+BEC/Receiver/Servos bleiben aus; nur MCU/Sensoren ueber USB:
 
 ```python
 import sensor_test
@@ -141,6 +189,8 @@ GPS-Fix und neue Barometerdaten sollen gemeinsam bestehen bleiben. Genau diese
 Dateipaare und deine physische Beobachtung sichern, dann die MANUAL-Integration
 planen. Diese Sensortests erzeugen keinerlei Servo-PWM und messen keinen MANUAL-
 oder STABILIZE-Regelkreis. Ihre Laufzeiten sind nur die des Sensorstarters.
+Nach Fix etwa 10..20 m gehen und zurueck, Barometer langsam anheben/absenken.
+Die 180 s werden nun vollstaendig mit 2 Hz gespeichert; in neuem S3-Ordner sichern.
 
 ## Stop, Dateien und Grenzen
 
@@ -149,9 +199,20 @@ Sensor-CSV gespeichert / Sensor-JSON gespeichert warten. USB bleibt zum Download
 angeschlossen; BEC bleibt aus. Unterordner pro Lauf auf dem Mac verwenden.
 Dateinamen sensors_<ticks>_<index>.csv/json werden nicht wiederverwendet.
 
-- CSV: 5 Hz, **nur die letzten 200 Zeilen**, etwa 40 s. Kein vollstaendiger Fluglog.
+- CSV ab 0.2.0: **ganzer kurzer Lauf mit 2 Hz**, gleiche 25 Spalten.
+  Der alte 200-Zeilen-Ring galt nur fuer 0.1.x. Nicht mit Flashplatz verwechseln:
+  Dateien loeschen vergroessert einen RAM-Ring nicht. Noch kein MANUAL-Fluglog.
+- Kompakter Puffer: 83 Bytes/Sample, fuer 180 s ca. 30 kB, fuer 300 s ca. 50 kB.
+  Dauer/Rate werden vor Hardwarestart reserviert; maximal 65536 Bytes und
+  32768 Bytes geplanter RAM-Reserve. Zu grosser Lauf/zu wenig gemeldetes RAM:
+  klare Fehlermeldung vor Start, keine stillen Verluste oder abgesenkte Rate.
+  Dann Dauer/log_hz bewusst reduzieren. Die Reserve ersetzt keine MCU-Messung.
 - JSON: Konfiguration, Runtime, Fehlerphase/Text, GPS-Zaehler, erste vier gueltige
   NMEA-Saetze, PROM, Startdruck, Messanzahl und Timingstatistik des ganzen Laufs.
+- JSON-Schema 2: log.storage, capacity, record_bytes, allocated_bytes,
+  free_before_bytes, reserve_bytes und all_samples_retained. Letzteres bestaetigt
+  den Erhalt erfasster Samples, nicht zwingend volle Laufdauer oder GPS-Gueltigkeit.
+  UTC steht im CSV nun mit drei Nachkommastellen. Stromverlust verliert RAM-Daten.
 - Leere CSV-Zahlen bedeuten unbekannt/ungueltig, Alter -1 bedeutet unbekannt.
   Frische bezieht sich auf Softwareempfang, nicht auf einen Hardwarezeitstempel.
 - GPS nach Pollpause >100 ms: Altdaten verwerfen, neue Saetze verlangen. Kein
@@ -160,12 +221,21 @@ Dateinamen sensors_<ticks>_<index>.csv/json werden nicht wiederverwendet.
 - Fehler werden fuer diesen Sensor verriegelt und mit Phase/Text gespeichert.
   Ein Sensorfehler darf nicht still durch einen alten Wert als frisch ersetzt werden.
 
-Hoststand dieser Vorbereitung: 120 Tests bestanden (94 bisherige und 26 neue).
+Hoststand 0.2.0: 131 Tests bestanden (96 Steuerungs- und 35 Sensortests),
+einschliesslich neuer 180-Grad-Montage-/Kalibrierungsregressionen.
 Das bestaetigt Parser/Mathematik/Testablauf, keine physische Sensorfunktion.
 
 Rohlogs bleiben normalerweise ausserhalb Git; ausgewaehlte Nachweise spaeter
 mit Auswertung versionieren. Bei unvollstaendigem Export beide Dateien pruefen,
-keinen vollstaendigen Lauf behaupten. Noch keine realen Sensorergebnisse liegen vor.
+keinen vollstaendigen Lauf behaupten. Erster GY-63-Lauf liegt seit 2026-10-19 vor:
+60.002 s, 594 Messungen, Adresse 0x77, CRC korrekt, keine protokollierten Fehler.
+Druck/Temperatur plausibel. Besitzer bestaetigt Anheben von Hawk im selben Lauf
+mit ungefaehr passender positiver Hoehenaenderung: **S1 funktional bestanden**
+aus Logpruefung und Besitzerbeobachtung. Absolute Genauigkeit/Drift nicht
+quantifiziert. Die GPS-Wiederholung gps_2 samt Konsole bestaetigt Fix und
+Bewegungsreaktion; S2 und gemeinsamer S3 funktional bestanden. Der separate
+USB-Startbefund wird dadurch nicht geklaert.
+[Auswertung und separater USB-Startbefund](testdaten/barometer_tests/AUSWERTUNG.md).
 
 ## Danach: MANUAL-Flugdaten vorbereiten
 
@@ -173,12 +243,15 @@ Naechster Codeumfang nach bestandenem S1/S2/S3: Sensorpolling begrenzt in den
 bisherigen MANUAL-Ablauf integrieren, gemeinsame Zeitbasis fuer IMU/RC/Ausgaenge/
 GPS/Barometer und ganze Fluege aufzeichnenden Speicherweg implementieren. Den
 Mehraufwand am Boden messen; keine blockierenden ADC-Wartezeiten in app.run().
-Der jetzige 200-Zeilen-Ring reicht dafuer nicht. Ein gepackter RAM-Puffer fuer
-z.B. 600 Samples bei 1 Hz (10 min) plus fortlaufende Zeit-/Fehleraggregate ist
+Der neue vollstaendige Sensorpuffer enthaelt noch keine IMU/RC/Servo-Daten und
+ist nicht der Fluglogger. Ein gepackter RAM-Puffer fuer
+z.B. 5 min bei 1 Hz plus fortlaufende Zeit-/Fehleraggregate ist
 ein moeglicher erster Entwurf; den RAM-Bedarf auf dem MCU messen. Noch nicht
 implementiert. Speicherrate, Flugdauer und Medium bewusst festlegen;
 Flash-Schreiben mit aktiver Steuerung ist im aktuellen
 Regelkreis weiterhin ausgeschlossen. Deshalb ist S3 noch kein sofortiger Flugstart.
+Konkrete Anschluesse, Montage und Loggeraufgaben:
+[Einbau-/MANUAL-Arbeitsplan](EINBAU_UND_MANUAL_DATENFLUG.md).
 
 Danach manuell Daten sammeln, Zeiten/Fehler und Datenqualitaet bewerten, dann
 naechsten Schritt waehlen. Ein autonomer Kreis benoetigt zusaetzlich Kreis-/Kurs-
@@ -186,6 +259,9 @@ fuehrung, gueltige Sensorzustände, Modus-/Uebernahmeverhalten und eine passende
 Nick-/Geschwindigkeitsstrategie. GPS und Barometer allein implementieren das nicht.
 
 ## Primaerquellen
+
+- [MicroPython struct](https://docs.micropython.org/en/v1.29.0/library/struct.html),
+  [gc](https://docs.micropython.org/en/v1.29.0/library/gc.html): gepackte Puffer und RAM-Abfrage.
 
 - [Beitian BN-180](https://www.beitian.com/sys-pd/9.html): Modul-/Schnittstellenangaben.
 - [TE MS5611-Datenblatt](https://www.te.com/commerce/DocumentDelivery/DDEController?Action=srchrtrv&DocLang=English&DocNm=MS5611-01BA03&DocType=Data+Sheet): Kompensation, I2C, Wandlungszeit.

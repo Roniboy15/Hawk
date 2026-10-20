@@ -1,7 +1,9 @@
 """MicroPython-Startdatei; entscheidet nur ueber automatischen Start.
 
-Hauptlogik: AUTO_START ist standardmaessig False. Deshalb verursacht das
-Hochladen von main.py keine ungewollte Servoaktivierung beim Neustart.
+Hauptlogik: AUTO_START ist standardmaessig False. main.py startet dann
+keinen Regler und erzeugt selbst keine Servo-PWM. Das garantiert keine
+ruhenden Ruder bei bereits versorgten Servos: fehlende Pulse sind kein
+Neutralbefehl, und elektrische Start-/Versorgungsuebergaenge bleiben moeglich.
 Zum kontrollierten Test start_test.py in Thonny ausfuehren. Erst nach
 Bodentests kann AUTO_START=True gesetzt werden; das macht keine Flugfreigabe.
 """

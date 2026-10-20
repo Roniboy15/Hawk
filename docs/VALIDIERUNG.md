@@ -1,7 +1,7 @@
 # Validierung — v0.2.3-bench
 
-Letzter Hostlauf am 2026-10-18: 120 automatische Tests bestanden, CPython 3.9.6
-(94 bestehende Steuerungstests und 26 neue Sensortests).
+Letzter Hostlauf am 2026-10-20: 131 automatische Tests bestanden, CPython 3.9.6
+(94 bestehende Steuerungstests und 35 Sensortests).
 Alle 18 Firmwaredateien und der Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
@@ -140,8 +140,9 @@ Reglerwerte bleiben unveraendert. Erster T1-IMU_RUNTIME bleibt ungeklärt.
 Tischtestabschluss 913a9e6, neuer Branch codex/gps-baro-bringup. Der Besitzer
 akzeptiert den fehlenden unabhaengigen manuellen Rueckweg fuer seine geplanten
 MANUAL-Datenfluege durch den MCU. Das ist keine Verifikation der Ausfallsicherheit.
-Neue Sensoren werden zuerst separat ohne app/PWM geprueft; noch keine echten
-GPS-/Barometer-Messdateien oder Flugnachweise vorhanden.
+Neue Sensoren werden zuerst separat ohne app/PWM geprueft. Seit 2026-10-19
+liegen echte GY-63- und GPS-Einzellaeufe vor; GPS-Positionsnachweis und
+Flugnachweise fehlen weiter. Details in den Ergebnisabschnitten unten.
 
 26 neue Hosttests pruefen:
 
@@ -160,6 +161,92 @@ Diese Tests bestaetigen weder Kabelfarben/Signalpegel noch die echte GY-63-
 Platinenbeschaltung, GPS-Genauigkeit oder eine 100-Hz-Steuerung mit Zusatzsensoren.
 Sensorstarter-Timing ist kein MANUAL-Regelkreistiming. Konkrete Tests und Grenzen:
 [SENSOREN_TEST.md](SENSOREN_TEST.md).
+
+## Erster GY-63-Lauf und USB-Startbefund, Eingang 2026-10-19
+
+baro.json: 60.002 s, 594 Barometermessungen, Adresse 0x77, gueltiges PROM/CRC,
+errors={}, shutdown_ok=true. Die 200 aufbewahrten CSV-Zeilen sind strukturell
+konsistent, frisch/gueltig; D1/D2 ergeben exakt den gespeicherten Druck und
+die Temperatur. Druck 96322..96335 Pa, Temperatur 22.67..22.78 C. Hoehe
+-0.31..+0.83 m. Nachtrag des Besitzers: Hawk im selben Lauf angehoben;
+relative Anzeige stieg ungefaehr um die tatsaechliche Hubhoehe. **S1 funktional
+bestanden** aus Logpruefung und Besitzerbeobachtung. Absolute Genauigkeit,
+Drift und Wiederholbarkeit nicht quantifiziert; die bewegte Messspanne ist
+kein reines Sensorrauschen. GPS nicht angeschlossen. Sensorstarter-work im Mittel
+1.100 ms, maximal 23.365 ms, kein 50-ms-Trip; kein MANUAL-Regelkreistiming.
+
+Separater Besitzerbefund: Hoehen-/Seitenruder an GP6/GP7 beim USB-Anstecken
+maximal ausgeschlagen geblieben; BEC/Receiver/Sender vorher eingeschaltet,
+IMU unversorgt mit SDA/SCL/GND verbunden. Nach Kenntnis des Besitzers kein
+laufendes Programm, Thonny offen. Quelle sensor_test nutzt weder IMU noch PWM;
+konkrete MCU-Startdateien, GPIO-Pulse und elektrische Ursache ungemessen.
+Kein Nachweis eines Regler-/Vorzeichenfehlers. Weitere Sensorchecks mit BEC
+aus; vor erneutem Aktuatorbetrieb Start-/Versorgungsbefund eingrenzen.
+[Rohdaten, Fingerprints, Pruefungen und Grenzen](testdaten/barometer_tests/AUSWERTUNG.md).
+
+## Erster GPS-Aussenlauf und UART-Korrektur, Eingang 2026-10-19
+
+180.225 s, 908 pruefsummenkorrekte NMEA-Saetze, 360 GGA/RMC-Updates,
+keine Pruefsummen-/Parserfehler. Datenverbindung bestaetigt; kein protokollierter
+Positionsfix. Erste Rohsaetze melden No-Fix, die spaetere Receiverloesung ist
+bei 314 Pollpausen/Zustandsruecksetzungen nicht rekonstruierbar. S2 bleibt offen,
+S3 noch ausstehend. Besitzer identifiziert weiss = GPS-TX bei diesem Exemplar.
+TX-Spannungspegel nicht gemessen; LED-Farben sind kein Positionsnachweis.
+
+work erreicht 423.331 ms (324/8260 >50 ms), period maximal 423.541 ms.
+Im Quellcode nachgewiesenes Risiko: Feste UART-Lesemengen warten auf RP2
+auch bei timeout_char=0 auf nachkommende Zeichen. Normaler Empfang und
+Altdatenverwerfen lesen seit Sensor-Test 0.1.1 nur bereits verfuegbare Bytes
+innerhalb ihres Mengenlimits. Zwei Tests mit eintreffenden 9600-Baud-Bytes
+scheiterten vor und bestehen nach der Korrektur. Dritter neuer Test prueft
+persistente Receiver-Fixzaehler getrennt vom geloeschten aktuellen Fixstatus.
+Die 100-ms-Frischegrenze wurde nicht gelockert. Alle 123 Hosttests bestehen;
+verbesserte physische Laufzeit und Positionsfix sind noch nachzutesten.
+
+CSV/JSON-Struktur, Flag-/Leerwertkonsistenz, erste NMEA-Saetze und Rohdatei-
+Fingerprints geprueft. Auswertung und exakte Wiederholung nach Modulupdate:
+[GPS-Aussenlauf](testdaten/gps_tests/AUSWERTUNG.md). Kein MANUAL-Fluglog und
+keine Servo-/Hardwarequalifikation aus diesen Host- und Sensorergebnissen.
+
+## GPS-Wiederholung und ganze kurze Sensorlogs, Eingang 2026-10-20
+
+gps_2: erster Fix 74.820 s, 1883 saubere NMEA-Saetze, 106 GGA-/106 RMC-
+Fixsaetze, maximal 12 benutzte Satelliten, keine Pollpausen/Parserfehler.
+work-Mittel 2.090 ms, Maximum 33.329 ms, keine 50-ms-Ueberschreitung;
+weiterhin nur Sensorstarter-Timing. CSV enthaelt die letzten 40.735 s, die
+nachgereichte Konsole den frueheren West-/Sued-Hinweg und Ost-/Nord-Rueckweg.
+S2 funktional bestanden mit Besitzerbeobachtung, keine vermessene absolute
+Genauigkeit. Dateiversion noch 0.1.0 trotz neuer Zaehler; vor S3 konsistenten
+Dateisatz/Soft-Reboot sicherstellen. [Auswertung](testdaten/gps_tests/AUSWERTUNG_GPS_2.md).
+
+Auf Besitzerwunsch ab Sensor-Test 0.2.0 ganzer kurzer Lauf im gepackten RAM,
+standardmaessig 2 Hz, statt Ueberschreiben nach 200 Zeilen. Sechs neue Hosttests:
+voller 180-s-Export mit Anfang/Ende, gepackte Koordinaten/Leerwerte/Flags,
+Mitternacht/Schaltsekunde/Datum, Ueberlauf ohne Ueberschreiben sowie Groessen-
+und RAM-Limit vor Hardwarestart. Vorhandener Exporttest prueft weiter UART-
+Abschaltung vor CSV-Schreiben. Alle 129 Tests bestehen. Neue Speicherung
+physisch noch zu validieren: der inzwischen eingegangene S3-Lauf verwendet
+weiter 0.1.0 / Schema 1. app/bench-Regelkreis bleibt unveraendert.
+
+## S3 gemeinsam und geplanter IMU-Umbau, Eingang 2026-10-20
+
+S3 funktional bestanden: 172.972 s, keyboard_interrupt/shutdown_ok, errors={},
+GPS ohne Parser-/Pruefsummenfehler oder Pollpausen, 1671 Barometermessungen.
+Alter 200-Zeilen-Ring exportiert letzte 40.963 s von 841 Samples. Der Nord-/
+Ostanteil ist sichtbar, die komplette Sued/West-bergauf/Ost-bergab/Nord-Runde
+nicht. Kompensation aus D1/D2/PROM fuer alle 200 CSV-Zeilen nachgerechnet;
+Druck/Temperatur stimmen exakt. Hoehensprung 2.21 m in 0.201 s erfordert
+ruhigen Einbau-/Anstroemtest, Ursache nicht bewiesen. Kein Vario-/Regelungsnachweis.
+[Auswertung](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
+
+Besitzer bestaetigt geplante IMU-Drehung: Oberseite oben, X nach hinten.
+Zwei neue Hostregressionen pruefen 180 Grad um Z mit body_signs=(-1,-1,1)
+fuer Accel UND Gyro nach Rohsensoroffset/-skala sowie die Ablehnung alter
+Levelmetadaten und Erhaltung der RC-Daten bei neuer Levelkalibrierung.
+96 Steuerungs-/35 Sensortests, insgesamt 131 bestanden. Aktive Montagezeichen
+bleiben unveraendert, bis die IMU tatsaechlich umgebaut wird. Hosttests ersetzen
+keine SENSOR-/MANUAL-/Stabilisierungspruefung nach dem mechanischen Umbau.
+[Einbauplan](EINBAU_UND_MANUAL_DATENFLUG.md).
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 

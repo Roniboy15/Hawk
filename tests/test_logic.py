@@ -29,6 +29,7 @@ import calibration
 import receiver
 import outputs
 import calibrate_rc
+import calibrate_level
 import bench_test
 from attitude import Attitude, quaternion, body_error
 from receiver import normalize
@@ -36,7 +37,7 @@ from outputs import command
 from control import AxisController, Gate, select_mode
 from logger import RingLog
 from diagnostics import BenchDiagnostics, TimingStats, rx_snapshot
-from imu import validate_transform
+from imu import IMU, validate_transform
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/'tools'))
 from analyze_bench import inspect_run, read_csv, main as analyze_main
 
@@ -530,6 +531,43 @@ class PureTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_transform((0, 1, 2), (1, -1, 1))
         validate_transform((0, 1, 2), (1, -1, -1))
+
+    def test_rearward_top_up_mount_transforms_accel_and_gyro_after_raw_offsets(self):
+        # Synthetische Registerdaten fuer denselben Koerpervektor nach 180 Grad Z.
+        # __new__ vermeidet jede Bus-/Pininitialisierung und Ruhekalibrierung.
+        sensor = IMU.__new__(IMU)
+        sensor.settings = {'body_axes': (0, 1, 2), 'body_signs': (-1, -1, 1),
+                           'acc_offset': (0.0625, 0.125, -0.0625),
+                           'acc_scale': (2, 0.5, 2)}
+        validate_transform(sensor.settings['body_axes'], sensor.settings['body_signs'])
+        raw = (-1024, 6144, 13312, 0, -1310, 2620, 3930)
+        payload = b''.join((value & 65535).to_bytes(2, 'big') for value in raw)
+        sensor.buffer, sensor.addr, sensor.bias = bytearray(14), 0x68, (0, 0, 0)
+        sensor.bus = types.SimpleNamespace(readfrom_mem_into=lambda address, register, target:
+                                           target.__setitem__(slice(None), payload))
+        self.assertEqual(sensor.read(), (0.0625, -0.5, 0.4375, 10.0, -20.0, 30.0))
+        self.assertFalse(sensor.saturated)
+
+    def test_mount_change_requires_new_level_and_level_calibration_keeps_rc(self):
+        previous = {'roll': 0.0, 'pitch': 0.0, 'axes': [0, 1, 2], 'signs': [1, 1, 1],
+                    'offset': list(config.SENSOR['acc_offset']),
+                    'scale': list(config.SENSOR['acc_scale'])}
+        rc = {'roll': {'min': 1000, 'center': 1500, 'max': 2000}}
+        data = {'schema': 1, 'rc': rc, 'level': previous}
+        with patch.dict(config.SENSOR, {'body_signs': (-1, -1, 1)}):
+            with self.assertRaises(ValueError):
+                calibration.check_orientation(previous, config.SENSOR)
+            with patch.object(calibrate_level, 'IMU') as factory, \
+                    patch.object(calibrate_level, 'load', return_value=data), \
+                    patch.object(calibrate_level, 'save') as save, \
+                    patch('builtins.input', return_value=''), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                factory.return_value.calibrate_gyro.return_value = (0, 0, 1)
+                calibrate_level.run()
+            self.assertIs(data['rc'], rc)
+            self.assertEqual(data['level']['signs'], [-1, -1, 1])
+            calibration.check_orientation(data['level'], config.SENSOR)
+            save.assert_called_once_with(config.CALIBRATION_FILE, data)
 
     def test_log_bounded_order(self):
         log = RingLog(3)

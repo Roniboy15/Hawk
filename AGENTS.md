@@ -78,6 +78,90 @@ pin order and actual signal level remain to be checked before physical connectio
 See docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md and
 docs/NAECHSTE_SCHRITTE.md. Do not label all fault/timing qualification complete.
 
+Owner update (2026-10-19): first GY-63 run archived under
+docs/testdaten/barometer_tests/; 60.002 s, 594 samples, valid PROM CRC,
+no logged errors. Sensor data path verified. Owner subsequently confirmed lifting
+Hawk during this same run: indicated height increased by approximately the lift
+distance. S1 functionally passed using log evidence plus owner observation;
+absolute accuracy/drift/repeatability are not quantified. GPS was disconnected
+for that barometer run; a later GPS result is recorded below.
+Separate incident: powered BEC/receiver and transmitter already on, elevator/
+rudder at GP6/GP7 moved to maximum on USB insertion and stayed there. Owner
+believes no program was running; Thonny was open. Existing IMU was unpowered
+but SDA/SCL/GND remained connected. Owner later supplied current main.py with
+matching startup logic and reported AUTO_START=False; files at the incident
+may have differed, boot.py/waveforms unknown. Capacitor reported 1000 uF / 10 V,
+parallel across regulated BEC 5 V and GND, minus to GND. This reported connection
+is plausible; no measurements establish capacitor performance or event cause.
+Do not attribute this to attitude correction: sensor_test never uses IMU/PWM.
+Keep servos off for sensor-only work; power the IMU normally or disconnect it
+fully with all supplies off, not VCC alone. Investigate startup/back-power and
+wiring before another powered mounted-actuator test; do not deliberately
+reproduce endstop movement or add automatic boot PWM as an unproven fix.
+This does not block isolated sensor development or revoke the accepted MCU risk.
+
+Later owner update (2026-10-19): BN-180 connected and tested outdoors;
+white wire identified as GPS TX in the supplied description. Apply that color
+only to this specimen, not every BN-180; actual TX voltage was not measured.
+docs/testdaten/gps_tests/ contains a 180.225-s run with 908 checksum-valid
+sentences, 360 GGA/RMC updates, no checksum/parse errors, but no logged paired
+fix. First raw sentences show no fix; later receiver fix status cannot be
+reconstructed because 314 poll gaps clear current state. Do not call S2 passed
+or infer a defective GPS/zero satellites for the whole run from reset defaults.
+Source bug: RP2 v1.29 enforces inter-character timeout even at timeout_char=0;
+fixed-size UART reads can wait through a serial burst. Sensor-test 0.1.1 now
+requests only min(UART.any(), limit) in normal and discard paths, preserving
+100-ms freshness and paired-fix rules. New receiver fix/satellite counters survive
+freshness resets and are not current navigation validity. Two timed-stream
+regressions failed before the fix, passed after; 123 host tests now pass.
+Physical improvement/fix still needs an outdoor repeat with the six updated
+sensor modules; then S3. Keep old logs and save repeats in separate folders.
+
+Owner/result update (2026-10-20): gps_2 plus a supplied console excerpt now
+functionally pass S2: first paired fix 74.820 s, 106 GGA and 106 RMC fix sentences,
+up to 12 used satellites, no poll gaps/checksum/parse errors. Work max 33.329 ms,
+no >50-ms event. CSV is only final 40.735 s; the owner returned earlier. Console
+proves west/south movement then east/north return; exact original start position
+is missing, so do not assert surveyed closure or absolute accuracy. See
+docs/testdaten/gps_tests/AUSWERTUNG_GPS_2.md and gps_2_konsole.txt. Preserve raw
+files. The logged test version is still 0.1.0 despite new counters; actual file
+set/import cache uncertain. Next S3 must use consistent modules and soft reboot.
+Owner requested retaining whole short sensor runs. Sensor-test 0.2.0 now stores
+packed RAM samples (83 bytes, default 2 Hz), allocates for the requested duration
+before hardware, and exports after stop. About 30 kB for 180 s, 50 kB for 300 s;
+64-KiB buffer limit plus planned 32-KiB free-RAM reserve. Reject oversize/low
+reported memory before starting devices; never silently wrap or lower rate.
+CSV still 25 columns, UTC normalized to milliseconds; JSON schema 2 records log
+capacity/bytes/all_samples_retained. Power loss still loses RAM. Existing app/
+bench logging is unchanged; this is not yet a MANUAL flight logger. 129 host
+tests pass, including full simulated 180-s retention and memory/overflow paths.
+New storage needs physical validation in a ground run, not another mandatory S2 repeat.
+
+Owner/result update (2026-10-20): S3 functionally passed, 172.972 s, explicitly
+stopped by owner with Ctrl+C, shutdown_ok and no logged sensor errors/poll gaps.
+Owner route: south level, west uphill, east downhill, north level. Archived
+S3 still identifies sensor-test 0.1.0/schema 1 and retains 200 of 841 rows,
+only final 40.963 s; do not claim the new 0.2.0 full-run buffer was physically
+validated or that the entire route is proved. Last window moves mostly north
+with an east component. Barometer compensation matches raw data, but a 2.21-m
+height change over 0.201 s needs installation/pressure-artifact checks, not an
+assumed physical climb or a speculative filter fix. See
+docs/testdaten/S3_gps_and_baro/AUSWERTUNG.md. Preserve raw files.
+Planned IMU installation is owner-confirmed top-up, X rearward: a 180-degree
+Z rotation, body_axes=(0,1,2), body_signs=(-1,-1,1). Change active mapping only
+with physical remount, recalibrate level, retain RC and raw-frame acc calibration,
+then redo SENSOR/MANUAL/stabilization directions. Level calibration alone cannot
+detect the reversed longitudinal axis. Two new host regressions cover transforms
+and calibration compatibility; 131 total tests pass. Current mapping is unchanged.
+Installation rails: GPS uses regulated 5 V; IMU and GY-63 use 3V3, shared GND.
+Do not put all three sensors on 3V3 or parallel BEC/USB 5-V sources at the board.
+Owner approved the sensor closure commit and creation of codex/manual-flight-logger
+on 2026-10-20. Keep the closure on codex/gps-baro-bringup and start the logger
+branch directly from that commit, not old main. No push or merge is requested.
+docs/EINBAU_UND_MANUAL_DATENFLUG.md specifies wiring, power,
+mounting and the proposed five-minute/1-Hz logger with continued MANUAL on log
+capacity exhaustion and a ground-only stop/export before power removal.
+
 ## Working boundaries
 
 Keep changes small and preserve the separation of pure mathematics, hardware

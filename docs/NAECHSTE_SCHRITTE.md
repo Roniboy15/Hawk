@@ -20,30 +20,64 @@ Verbindung vor Wiederholungen sichern. T5: im Mittel 74.92 Hz, work maximal
 Die [Testauswertung](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md)
 haelt die Nachweise und ihre Grenzen fest.
 
-## 2. Jetzt konkret: S1, S2, S3
+## 2. Sensorfunktion abgeschlossen; neue Vollaufzeichnung noch pruefen
 
 Der eigene Vorbereitungscommit auf dem neuen Branch umfasst:
 GPS-NMEA-Empfang, MS5611-Treiber und separater sensor_test ohne app/PWM.
 Gains, Servozeichen und Kalibrierung werden dafuer nicht umgestellt.
 
-1. **Anschluss klaeren:** GY-63-Pins sind bekannt. Beim BN-180 fehlen noch
-   eindeutige Kabelzuordnung und Bestaetigung des TX-Signalpegels. Die gelieferte
-   Spezifikation ersetzt diese Angaben nicht. Keine Kabelfarben raten.
-2. **S1 Barometer:** GY-63 an I2C1 GP10/GP11, erst Druck/Temperatur, dann
-   relative Hoehenaenderung beim Anheben pruefen. Keine Neukalibrierung der Lage.
-3. **S2 GPS:** BN-180 TX an UART0 RX GP13 nach Anschluss-/Pegelabgleich;
-   9600 Baud, draussen gueltige GGA/RMC und Standort/Bewegung pruefen.
-4. **S3 gemeinsam:** beide Sensoren 180 s betreiben und Logs sichern.
-   Erhaltene Werte, Gueltigkeit, Datenalter, Fehler und Laufzeiten vergleichen.
+1. **Anschlussstand:** GY-63-Pins bekannt. Beim konkreten BN-180 ist laut
+   Besitzerbeschreibung weiss = GPS-TX; NMEA-Empfang bestaetigt die funktionierende
+   Datenverbindung. Andere Farben nicht raten; TX-Spannungspegel nicht gemessen.
+2. **S1 Barometer funktional bestanden:** GY-63 an I2C1 GP10/GP11 liefert
+   plausible Druck-/Temperaturwerte. Anheben mit ungefaehr passender positiver
+   Hoehenaenderung im selben Lauf vom Besitzer bestaetigt. Keine Neukalibrierung
+   der Lage erforderlich; absolute Genauigkeit/Drift nicht quantifiziert.
+3. **S2 GPS funktional bestanden:** gps_2 hat Fix nach 74.820 s und keine
+   Pollpausen. Konsole zeigt Hinweg mit West-/Suedanteil und Rueckweg nach
+   Osten/Nordosten. [Auswertung](testdaten/gps_tests/AUSWERTUNG_GPS_2.md).
+4. **S3 gemeinsam funktional bestanden:** 172.972 s, sauberer Ctrl+C-Abschluss,
+   GPS und Barometer zusammen, keine protokollierten Sensorfehler/Pollpausen.
+   Besitzerweg: Sueden eben, Westen bergauf, Osten bergab, Norden eben.
+   Gespeichert ist nur das Ende: Testversion 0.1.0 / Schema 1, 200 von 841
+   Zeilen, letzte 40.963 s. Neuer RAM-Puffer 0.2.0 damit physisch noch offen.
+   [S3-Auswertung](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
 
 **Alle Verdrahtungstabellen, Uploaddateien und genauen Aufrufe stehen in
 [SENSOREN_TEST.md](SENSOREN_TEST.md).** BEC/Servos bleiben fuer diesen Schritt aus.
-Noch keine echten Sensorergebnisse oder Flugdaten vorhanden.
+Erster GY-63-Lauf ausgewertet: 60.002 s, 594 Messungen, CRC korrekt, keine
+protokollierten Fehler. S1 mit Logpruefung und Besitzerbeobachtung funktional
+bestanden; GPS/S2 und gemeinsamer S3 ebenfalls funktional bestanden.
+Beim naechsten Bodenlauf konsistente Module, Soft-Reboot, Sensor-Test 0.2.0 /
+Schema 2 und vollstaendige Aufzeichnung pruefen. Keine weitere Huegelrunde allein
+deshalb. S3 zeigt Hoehenspruenge bis 2.21 m in 0.201 s; Kompensation stimmt,
+Einbau-/Anstroemeinfluesse sind noch nicht geklaert. Noch kein validiertes Vario.
+[Barometer-Auswertung](testdaten/barometer_tests/AUSWERTUNG.md).
 
-## 3. Anschliessend: MANUAL-Logger integrieren
+Aktueller USB-Startbefund (2026-10-19): bereits versorgte Hoehen-/Seitenruder
+an GP6/GP7 schlugen beim USB-Anstecken aus, waehrend die IMU ohne Versorgung
+an ihren Signalleitungen hing. Zuerst BEC aus; IMU mitversorgen oder bei
+getrennten Quellen ganz abstecken. Weitere reine Sensorchecks nur USB,
+BEC/Receiver/Servos aus. Vor erneutem Betrieb versorgter montierter Servos
+MCU-Startdateien, aktuelle Verdrahtung und Versorgungs-/Signalverhalten klaeren;
+keine absichtliche Wiederholung der Endausschlaege. Das blockiert die isolierten
+Sensorchecks nicht und aendert nicht die akzeptierte MCU-Abhaengigkeit.
+
+## 3. Jetzt konkret: Einbau und MANUAL-Logger
 
 Nach S1/S2/S3 bauen wir auf den bisherigen MANUAL-Durchgang auf. Der separate
 Sensorstarter steuert keine Ruder und ist daher noch kein MANUAL-Flugprogramm.
+Der konkrete [Einbau-/MANUAL-Arbeitsplan](EINBAU_UND_MANUAL_DATENFLUG.md) enthaelt
+Anschluesse, Versorgung, 180-Grad-IMU-Umbau und die naechsten Codeaufgaben.
+Nach Freigabe Sensorstand committen, dann codex/manual-flight-logger davon
+abzweigen. Aktive IMU-Zeichen bleiben bis zum mechanischen Umbau unveraendert.
+
+Einbauentscheidung: Oberseite der IMU bleibt oben, X zeigt kuenftig nach hinten.
+Dann body_axes=(0,1,2), body_signs=(-1,-1,1) einstellen, neu waagerecht
+kalibrieren und Sensor-/Ruder-/Stabilisierungsrichtungen pruefen. Kalibrieren
+allein erkennt die umgekehrte Laengsrichtung nicht. RC-Kalibrierung erhalten.
+5 V/GND/3V3 als Verteilung ist sinnvoll: GPS an 5 V, IMU und GY-63 an 3V3.
+MCU-Bordversorgung und USB-Pfad vorher klaeren, keine zwei 5-V-Quellen parallel.
 
 - Sensorpolling mit begrenztem Aufwand in den MANUAL-Ablauf integrieren;
   keine ADC-Wartepausen oder GPS-Fix-Warteschleife zwischen RC und Servoausgabe.
@@ -52,11 +86,15 @@ Sensorstarter steuert keine Ruder und ist daher noch kein MANUAL-Flugprogramm.
   spaeteren Download keine ungeregelten Versorgungsquellen parallel verbinden.
 - IMU, RC, Servoausgaben, GPS, Barometer und Iterationszeiten auf gemeinsamer
   Zeitbasis aufzeichnen. Datenalter und Fehlerkontext mit speichern.
-- Ganze Fluege abdecken: jetzige 200-Zeilen-Ringe reichen nicht. Gewuenschte
+- Ganze Fluege abdecken: Controller-Logs sind weiterhin begrenzte Ringe;
+  der neue volle Sensorpuffer hat noch keine IMU/RC/Servo-Daten. Gewuenschte
   Flugdauer/Rate und Speicherweg festlegen. Ein erster Entwurf fuer kurze
-  Datenfluege kann ein gepackter RAM-Puffer mit 600 Samples bei 1 Hz fuer 10 min
+  Datenfluege kann ein gepackter RAM-Puffer fuer 5 min bei 1 Hz
   sein, ergaenzt um Zeit-/Fehleraggregate jeder Iteration. RAM-Reserve auf dem
   konkreten MCU pruefen; nicht automatisch eine Speicherkarte voraussetzen.
+  Bei vollem Puffer nur Logging anhalten, MANUAL-Steuerung fortsetzen.
+  Boden-Stop/Export bei noch eingeschalteter Versorgung implementieren;
+  nicht per Timer die Steuerung waehrend eines Flugs beenden.
   Das ist ein Implementierungsplan, noch keine vorhandene Funktion.
   Flashzugriffe bleiben aus der
   aktiven Regelschleife ausgeschlossen; Speicherloesung bewusst implementieren.
@@ -89,7 +127,7 @@ Naechste sinnvolle Diagnoseergaenzungen bei MANUAL-Integration:
 
 Vergleichsmessungen mit gleichen Einstellungen sichern; keine alten Fehlerdaten
 ersetzen. Drei 60-s-Laeufe sind ein sinnvoller Reproduzierbarkeitsvergleich,
-keine garantierte Worst-Case-Grenze. Die 120 Hosttests pruefen Logik, keine
+keine garantierte Worst-Case-Grenze. Die 131 Hosttests pruefen Logik, keine
 realen Ausfuehrungszeiten. T4, Versorgung und Receiver-Failsafe bleiben offen;
 [Sicherungs-/Versorgungsbefunde](VERSORGUNG_WARNHINWEISE.md) weiter mitfuehren.
 
@@ -105,9 +143,11 @@ nicht vorab noetig. Einen fertigen Kreisregler gibt es im jetzigen Code nicht.
 
 ## Git fuer den laufenden Schritt
 
-Auf codex/gps-baro-bringup bleiben, S1/S2/S3 ausfuehren und protokollieren.
-Der Vorbereitungsstand ist hostgeprueft; physische Ergebnisse werden spaeter
-in einem getrennten Ergebniscommit gesichert.
-Der alte Tischtestbranch bleibt die Vergleichsbasis. Erst fuer die nachfolgende
-MANUAL-Loggerintegration bei Bedarf vom dann passenden Commit einen eigenen
-Branch anlegen. Kein automatischer Merge/Push/Flug-Release-Tag.
+Sensorabschluss auf codex/gps-baro-bringup und anschliessender neuer Branch
+wurden vom Besitzer am 2026-10-20 freigegeben.
+Er enthaelt Ergebnisse, UART-Korrektur und neuen hostgeprueften RAM-Puffer mit
+offenem Hardwarecheck. Abschluss committen und den neuen Branch
+codex/manual-flight-logger direkt davon erstellen. main ist noch sieben
+Commits hinter der aktuellen Branchbasis; nicht dort neu anfangen.
+Push/PR und Merge nach main sind gesonderte Schritte; main muss den
+Loggerfortschritt nicht aufhalten. [Git-Ablauf](GIT.md).

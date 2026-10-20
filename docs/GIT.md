@@ -1,170 +1,122 @@
-# Git auf dem Mac: einmal einrichten, danach kleine Aenderungen sichern
+# Git fuer den aktuellen Hawk-Stand
 
-Die einmalige Einrichtung unten beschreibt das urspruengliche Paket; im
-vorhandenen Repository nicht erneut klonen oder origin entfernen. Aktuelle Arbeit:
-codex/gps-baro-bringup, Details im Abschlussstand.
+Sensorabschluss und anschliessender Branchwechsel wurden am 2026-10-20 vom
+Besitzer freigegeben. Die folgende Bestandsaufnahme beschreibt den Ausgangsstand
+vor diesem Abschlusscommit.
+Das vorhandene Repository weiterverwenden, nicht neu klonen oder origin ersetzen.
 
-Das urspruengliche Paket enthaelt den Code und repository.bundle mit dem vorbereiteten
-lokalen Git-Repository/Startcommit. Damals wurde kein GitHub-Repository angelegt
-oder veroeffentlicht. Ein lokales Repo funktioniert ohne Konto und ohne Internet.
+## Wo wir stehen
 
-## 1. Git pruefen
+- Aktueller Branch: **codex/gps-baro-bringup**, letzter Commit **bbdf934**.
+- Der vorherige Tischtestabschluss **913a9e6** ist darin enthalten.
+- Lokal zeigt main auf **57a5ed2** und ist Vorfahr des aktuellen HEAD;
+  dazwischen liegen sieben Commits, noch ohne den vorbereiteten Abschluss.
+- Remote: https://github.com/Roniboy15/Hawk.git. Der gespeicherte origin-Stand
+  zeigt dieselben Spitzen; ohne neues Fetch ist das keine Live-Auskunft von GitHub.
+- Die uncommittierten Aenderungen enthalten Sensorbefunde, UART-Korrektur,
+  vollstaendigen Sensor-RAM-Puffer mit offenem Hardwarecheck sowie Einbauplan.
+  Dieser Inhalt wird im freigegebenen Abschlusscommit gesichert; Push und
+  Merge sind weiterhin gesonderte, nicht beauftragte Schritte.
 
-Terminal oeffnen:
+Der Sensorbranch umfasst damit auch fruehere Roll-/Nick-/Gier-/Fehlertestarbeit,
+die main noch fehlt. Bei einer spaeteren Pull Request den gesamten Unterschied
+pruefen, nicht nur die zuletzt angefassten GPS-Dateien.
 
-```bash
-git --version
-```
+## Die Begriffe
 
-Wenn macOS Git/Entwicklerwerkzeuge installieren moechte, der Installations-
-aufforderung folgen. Danach nochmals pruefen. Python 3 fuer Tests muss auf
-dem Mac vorhanden sein; Thonny bringt einen Interpreter mit, aber dessen
-Vorhandensein garantiert keinen python3-Befehl im Terminal.
+| Schritt | Bedeutung |
+| --- | --- |
+| Speichern | Dateiinhalt im Arbeitsordner aendern |
+| Stage / git add | Genaue Dateiversion fuer den naechsten Commit auswaehlen; auch bestehende Dateien und Loeschungen |
+| Commit | Lokalen zusammenhaengenden Snapshot mit Beschreibung anlegen |
+| Branch | Benannten Entwicklungsstand verfolgen; neue Arbeit kann vom aktuellen Commit ausgehen |
+| Push | Lokale Commits zum GitHub-Branch uebertragen |
+| Fetch | Remote-Verlauf herunterladen, Arbeitsdateien noch nicht zusammenfuehren |
+| Pull | Fetch und anschliessende Integration in den gerade ausgecheckten Branch |
+| Pull Request (PR) | Vorschlag zur Pruefung/Zusammenfuehrung eines Branches auf GitHub |
+| Merge | Branchverlaeufe zusammenfuehren, z.B. Sensorstand nach main |
 
-## 2. Vorbereitetes Repo klonen
+Keiner dieser Schritte uebertraegt Firmware auf den MCU oder ersetzt einen
+Hardwaretest. Ein Commit darf sinnvollerweise auch eine Vorbereitungsfassung
+mit klar dokumentierten offenen physischen Tests sichern.
 
-ZIP im Downloads-Ordner entpacken; angenommen der entpackte Ordner heisst
-segelflug-controller. Einen Projektordner auf dem Mac anlegen und das Bundle
-klonen (Pfade bei anderer Ablage anpassen):
+## Empfohlener naechster Ablauf
 
-```bash
-mkdir -p ~/Documents/Projekte
-cd ~/Documents/Projekte
-git clone ~/Downloads/segelflug-controller/repository.bundle segelflug-controller
-cd segelflug-controller
-git remote remove origin
-git config user.name "Dein Name"
-git config user.email "deine-adresse@example.com"
-git status
-git log --oneline -5
-```
+1. Vorbereiteten Diff samt ausgewaehlten Rohdaten ansehen, 131 Hosttests und
+   die offenen Hardwarepunkte in VALIDIERUNG/S3-Auswertung beachten.
+2. Nach Besitzerfreigabe passenden Inhalt stagen, `git diff --staged` pruefen
+   und auf codex/gps-baro-bringup committen. Vorgeschlagene Nachricht:
+   **Sensorchecks auswerten und vollstaendige RAM-Aufzeichnung vorbereiten**.
+3. Direkt von diesem neuen Abschlusscommit **codex/manual-flight-logger**
+   erstellen. Nicht zuerst auf das aeltere main wechseln. main bleibt dabei
+   unveraendert; der Loggerbranch enthaelt alle bisherigen Ergebnisse.
+4. Den Logger als eigenen Umfang entwickeln und testen, neue Codeaenderungen
+   und spaetere physische Ergebnisse in nachvollziehbaren Commits sichern.
 
-Die beiden Identitaetswerte durch deine eigenen ersetzen. Die Konfiguration
-gilt nur fuer dieses Projekt; der vorbereitete Startcommit ist als Codex
-gekennzeichnet, nicht als von dir geschrieben. origin zeigt beim Klonen nur
-auf das lokale Bundle und wird deshalb entfernt. Die Arbeitskopie auf deinem
-Mac ist ab jetzt die verbindliche Quelle fuer Codeaenderungen.
+Die dazugehoerigen Befehle gehoeren zum freigegebenen Ablauf. Schema:
 
-Alternative, falls du keinen vorbereiteten Verlauf verwenden willst: den
-entpackten Codeordner verwenden, dort git init -b main, git config wie oben,
-git add firmware docs tests README.md .gitignore, git commit -m "Startversion".
-repository.bundle nicht mitcommitten. Die Alternative ist nicht erforderlich,
-wenn du bereits mit git clone begonnen hast.
-
-## 3. Eigene funktionierende Einstellungen sichern
-
-Bekannte Richtungen/Pins in firmware/config.py kontrollieren. Die neu auf dem
-MCU erstellte calibration.json nach firmware/ herunterladen. Dann:
-
-```bash
-git status
+```sh
+git status --short --branch
 git diff
-git add firmware/config.py firmware/calibration.json
+# Passende Dateien explizit mit git add auswaehlen.
 git diff --staged
-git commit -m "RC- und Lagenkalibrierung fuer mein Flugzeug"
+git commit -m "Sensorchecks auswerten und vollstaendige RAM-Aufzeichnung vorbereiten"
+git switch -c codex/manual-flight-logger
 ```
 
-Wenn calibration.json noch nicht existiert, erst kalibrieren; nicht eine leere
-Datei erstellen. Beim Umstecken USB und Servo-/BEC-Versorgung trennen.
-Dieser Segler hat kein Triebwerk.
+Die Rohdaten enthalten Standortkoordinaten. Vor einem spaeteren Push bewusst
+entscheiden, ob diese in das betreffende GitHub-Repository gehoeren; ein
+lokaler Commit allein veroeffentlicht sie noch nicht. Keine Zugangsdaten,
+zufaelligen Downloads oder leeren Geraetekalibrierungen mitstagen.
 
-### Aktueller Abschlussstand (2026-10-18)
+## Wann main aktualisieren und was pull dabei tut
 
-Der Tischteststand ist auf Besitzerwunsch als **913a9e6** auf
-codex/bench-fault-validation committed. Danach wurde **codex/gps-baro-bringup**
-von genau diesem Commit angelegt. main und Remotes wurden dabei nicht veraendert.
-T3/T5/T6 funktional bestaetigt, T4 offen; Timing bleibt ein Befund.
+Der neue Loggerbranch kann sofort vom Sensorabschluss weiterarbeiten. Ein
+Merge nach main muss diesen Fortschritt nicht aufhalten. main erst bewusst
+zum dokumentierten Integrationsstand machen; ein Merge ist keine Flugfreigabe.
 
-Die neue Sensorimplementierung wird auf Besitzerwunsch als eigener
-Vorbereitungscommit gesichert: 120 Hosttests bestanden, Hardwarepruefung noch
-offen. Als naechstes S1/S2/S3 aus [SENSOREN_TEST.md](SENSOREN_TEST.md)
-ausfuehren und Sensorergebnisse gesondert sichern. Fuer diesen laufenden Schritt
-auf demselben Branch bleiben;
-die spaetere MANUAL-Loggerintegration ist ein eigener Umfang. Kein automatischer
-Merge, Push oder Flug-Release-Tag.
+Wenn der Sensorabschluss zu GitHub soll: den Sensorbranch pushen und eine
+Pull Request **codex/gps-baro-bringup -> main** erstellen. Die PR beschreibt
+die Ergebnisse und die Grenzen: neuer RAM-Puffer noch nicht physisch bestaetigt,
+kein integrierter MANUAL-Fluglogger, Start-/Versorgungsbefunde weiterhin offen.
+Vor Merge den gesamten Branchvergleich und Tests pruefen. Push/PR/Merge sind
+hier Empfehlungen, kein bereits ausgefuehrter Auftrag.
 
-Staging ist die Auswahl des naechsten Commitinhalts: `git add` erfasst auch
-Aenderungen an bestehenden Dateien und Loeschungen. `git diff --staged` zeigt
-diese Auswahl. Spaetere Datei-Aenderungen brauchen erneut `git add`.
-Committen speichert einen lokalen Snapshot; weder Upload noch Flugfreigabe.
+Nach einem Merge auf GitHub kann die lokale main-Kopie aktualisiert werden:
 
-## 4. Jede kleine Aenderung: derselbe Ablauf
-
-Beispiel: nur Roll-Reglerparameter aendern.
-
-```bash
-git switch -c codex/roll-abstimmung
-```
-
-Dann config.py lokal in Thonny bearbeiten und auf dem Mac speichern. Danach:
-
-```bash
-git diff
-python3 -m unittest discover -s tests -v
-```
-
-Geaenderte Firmwaredatei auf MCU hochladen, Stop/Soft-Reboot, Bodenversuch
-ausfuehren. Ergebnis kurz notieren. Wenn die Aenderung sinnvoll ist:
-
-```bash
-git add firmware/config.py
-git diff --staged
-git commit -m "Roll-Regler am Fluegel ruhiger abgestimmt"
-git status
-```
-
-Ein Commit pro zusammengehoeriger Aenderung: nicht jede einzelne Zeile,
-aber auch nicht Sensor, Verkabelung und alle Regler auf einmal. Dokumentation
-mitcommitten, wenn Bedeutung oder Testablauf sich aendert. Vor einem Branch-
-Wechsel nicht gespeicherte Arbeit zuerst committen, sonst kann sie mitwandern.
-
-Nach bestandenem Vergleich die Testversion in main uebernehmen:
-
-```bash
+```sh
+# Erst mit sauberem/gesichertem Arbeitsordner wechseln.
+git fetch origin
 git switch main
-git merge --ff-only codex/roll-abstimmung
-git tag -a v0.2.1-roll-boden -m "Roll am Boden geprueft"
+git pull --ff-only origin main
+git switch codex/manual-flight-logger
 ```
 
-Wenn --ff-only scheitert: nicht erzwingen. Es gibt parallele Aenderungen;
-erst Verlauf ansehen und die Zusammenfuehrung bewusst entscheiden.
+`pull` auf dem Loggerbranch wuerde nicht einfach main aktualisieren. Es wirkt
+auf den gerade aktiven Branch. `--ff-only` verweigert eine unbeabsichtigte
+neue Zusammenfuehrung bei auseinanderlaufenden Verlaeufen. Falls es scheitert:
+Verlauf ansehen, nicht mit reset/force umgehen.
 
-## 5. Alte funktionierende Version ansehen/wieder testen
+Alternativ ist nach bewusstem Abgleich ein lokaler Fast-Forward moeglich:
 
-```bash
-git log --oneline --decorate -10
-git switch -c codex/vergleich-alte-version v0.2.0-bench
-```
-
-So entsteht ein eigener Branch vom markierten Stand. Alle Firmwaredateien
-dieses Stands zusammen hochladen; Code- und Kalibrierformate muessen passen.
-MCU-Speicher aendert sich durch Git nicht automatisch. Nach dem Vergleich:
-
-```bash
+```sh
 git switch main
+git merge --ff-only codex/gps-baro-bringup
+git switch codex/manual-flight-logger
 ```
 
-Commits auf main rueckgaengig machen, ohne den Verlauf zu loeschen:
-git revert COMMIT_ID. Das erzeugt einen neuen Gegen-Commit; bei Konflikten
-zuerst klaeren. git reset --hard ist fuer diesen Lernablauf nicht noetig.
+Das ist eine Alternative zum obigen PR-Weg, kein zusaetzlich noetiger Schritt.
+Bei parallel veraendertem main vorher vergleichen. Bei einem Squash-Merge
+entstehen andere Commit-IDs; den davon abhaengigen Loggerbranch anschliessend
+bewusst abgleichen, statt geteilte Branchhistorie blind umzuschreiben.
+Alte Testbranches vorerst als Vergleich behalten; kein automatisches Loeschen,
+kein Force-Push, kein Flug-Release-Tag fuer einen Sensorfunktionstest.
 
-## 6. Optional spaeter GitHub als Sicherung
+## Version auf dem Modell nachvollziehbar halten
 
-GitHub anmelden, neues **privates** leeres Repository segelflug-controller
-anlegen. Dort weder README noch Gitignore automatisch erstellen, weil lokal
-schon ein Verlauf existiert. Dann die von GitHub gezeigte URL verwenden:
-
-```bash
-git remote add origin https://github.com/DEIN_NAME/segelflug-controller.git
-git push -u origin main
-git push origin --tags
-```
-
-Die Authentifizierung nach GitHub-Anleitung einrichten, kein Passwort/Token
-in Code oder Commit speichern. Nach spaeteren Commits: git push.
-main ist der gepruefte Stand; laufende Experimente bleiben auf Testbranches.
-
-## Merksatz
-
-Mac speichern -> Diff pruefen -> Hosttests -> MCU-Upload -> Neustart ->
-Bodentest -> geaenderte Geraetekalibrierung zurueck auf Mac -> Commit -> optional Push.
+Nach Aenderung: Mac-Dateien speichern, Diff/Hosttests, passende Firmwaremodule
+zusammen hochladen, Soft-Reboot, Bodenpruefung, Ergebnis sichern. Eine bestehende
+calibration.json beim Upload erhalten und vor Montage-/Kalibrierarbeit separat
+herunterladen. Geaenderte Geraetekalibrierung mit Datum/Commit/Montage zuordnen.
+Codecommit und Testbericht koennen getrennte Commits sein. Dadurch bleibt klar,
+welcher Code getestet wurde und welche Ergebnisse erst spaeter dazu kamen.

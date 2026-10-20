@@ -27,6 +27,61 @@ elektrische Signalform wurde nicht gemessen. Fehlende Pulse sind kein
 1500-us-Neutralbefehl; Servoreaktion ist modellabhaengig
 ([Pololu](https://www.pololu.com/blog/17/servo-control-interface-in-detail)).
 
+Neuer, davon getrennter Befund **2026-10-19: USB-Anstecken** bei vorher bereits
+versorgtem BEC/Empfaenger und eingeschaltetem Sender. Hoehen-/Seitenrudersignale
+an GP6/GP7; beide Ruder schlugen maximal aus und blieben dort. Nach Kenntnis
+des Besitzers lief kein Programm, Thonny war offen. Die bisherige IMU war ohne
+Versorgung, SDA/SCL/GND blieben angeschlossen. GY-63 war angeschlossen,
+GPS noch nicht. Kondensator laut Besitzer 1000 uF / 10 V, parallel am geregelten
+5-V-Ausgang, Minus an GND. Dieser gemeldete Anschluss und die Nennspannung
+sind plausibel; das beweist weder Transientenverhalten noch Ereignisursache.
+Barometerlog und getrennte Befunde:
+[GY-63-Auswertung](testdaten/barometer_tests/AUSWERTUNG.md).
+
+Der neue Sensorstarter konfiguriert im baro-Profil nur GP10/GP11 und verwendet
+weder IMU noch Servo-PWM. Der Hoststand main.py startet mit AUTO_START=False
+keinen Regler. Nachtrag: Die vom Besitzer jetzt gezeigte MCU-main.py hat
+dieselbe Startlogik, AUTO_START laut Besitzer False. Der Dateistand zum
+Ereignis bleibt laut Besitzer unbekannt; boot.py nicht uebermittelt.
+Thonny offen allein sagt weder Autostart noch aktives Programm sicher aus.
+Unversorgte IMU bedeutet hier deshalb nicht automatisch eine berechnete
+Maximalkorrektur. **Am ehesten zu pruefen: Signal-/Versorgungsuebergang,
+Rueckspeisung und abweichende Startdateien.** Ausloesender Puls und Ursache
+bleiben ohne Messung/MCU-Dateiabgleich offen.
+
+- Vor USB kann der bereits versorgte Empfaenger Spannung auf unversorgte
+  MCU-Eingaenge legen. Beim RP2040 ist die absolute GPIO-Grenze IOVDD+0.5 V,
+  nicht ein von der Versorgung unabhaengiger 3.3-/5-V-Grenzwert. RX-Pegel und
+  Schutzbeschaltung pruefen; tatsaechlicher Stromfluss hier nicht gemessen.
+  [RP2040-Datenblatt, Tabelle 622](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf).
+- Signalleitungen koennen unversorgte Bauteile je nach interner Schutzbeschaltung
+  rueckspeisen. Eine IMU ohne VCC, aber mit SDA/SCL am versorgten System ist
+  deshalb kein sauber abgetrennter Sensor. Pullups und konkrete Platine bestimmen
+  den Pfad. Das ist eine Hypothese fuer diesen Aufbau, kein Nachweis der Ursache.
+  [TI: Powered-off protection](https://www.ti.com/document-viewer/lit/html/scda015).
+- Keine laufenden Servoimpulse bedeutet keine zugesicherte Neutralstellung.
+  Manche Digitalservos halten einen zuletzt erkannten Befehl; das erklaert nicht
+  allein, wie der Maximalbefehl zustande kam. Auch Signal-/GND-Verwechslung,
+  Versorgungseinbruch oder ein anderer MCU-Autostart sind nicht ausgeschlossen.
+- Ein korrekt angeschlossener Kondensator kann Spannungsspitzen/-einbrueche
+  beeinflussen; er erzeugt keine gueltigen Servopulse. Ohne Anschlussplan,
+  Polaritaet/Daten und Messung weder Ursache noch Loesung behaupten.
+
+Bei diesem Befund zuerst BEC-/Servoversorgung aus, danach USB trennen.
+Keine Endausschlaege fuer Diagnose absichtlich mit montierten Servos wiederholen.
+IMU bei getrennten Quellen wieder normal versorgen oder vollstaendig abstecken;
+Sensorchecks nur mit USB, BEC/Receiver/Servos aus. main.py, config.AUTO_START
+und vorhandene boot.py auf dem MCU bei ausgeschaltetem BEC als Text pruefen,
+nicht zum Zentrieren einen unbekannten Regler starten. Kondensator gehoert bei
+entsprechender Auslegung parallel an den vorgesehenen BEC-Versorgungszweig,
+bei gepoltem Typ Minus an GND; niemals an einen GPIO. Auch nach Abschalten
+moegliche Restladung beachten. Vor erneutem Aktuatorbetrieb Aufbau eingrenzen;
+falls erforderlich mit geeigneter Messtechnik ohne belastete montierte Ruder.
+Kein Boot-Neutral-PWM als ungepruefter Workaround: es schuetzt nicht vor
+Ereignissen, die vor Ausfuehrung der Firmware auftreten.
+
+## Einordnung der Raum-/Steckdosenunterbrechung vom 2026-10-12
+
 1. **Raum-/Steckdosenversorgung:** Eine kurze Unterbrechung der Versorgung
    bzw. einer gemeinsamen Anschlussstelle passt am besten zum berichteten
    Ausfall mehrerer netzversorgter Geraete und selbsttaetiger Rueckkehr. Das ist

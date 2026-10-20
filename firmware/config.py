@@ -29,6 +29,11 @@ SENSOR = {'sda': 4, 'scl': 5, 'freq': 100000,
           'acc_offset': (0.0142, 0.02775, 0.19325),
           'acc_scale': (0.9924, 1.00085, 1.02405),
           'body_axes': (0, 1, 2), 'body_signs': (1, 1, 1)}
+# Geplanter Einbau: Oberseite weiter oben, Sensor-X nach hinten/Y nach rechts.
+# Erst BEIM mechanischen Umbau body_signs=(-1,-1,1) setzen (180 Grad um Z).
+# Das dreht Accel UND Gyro. Danach Lage neu speichern/Richtungen neu pruefen;
+# calibrate_level allein erkennt die umgekehrte Laengsrichtung nicht.
+# Aktive Werte oben gehoeren noch zum bisherigen getesteten Aufbau.
 GYRO_STD_MAX = 1.0
 ATTITUDE_ACCEL_GAIN = 1.0          # Gravitation nur schwach zur Driftkorrektur
 PITCH_CONTROL_LIMIT_DEG = 75.0    # Euler-Reglerbereich, keine Sensorgrenze
@@ -78,6 +83,8 @@ GPS = {'uart': 0, 'tx': 12, 'rx': 13, 'baudrate': 9600,
        'course_min_speed_ms': 2.0}
 BAROMETER = {'i2c': 1, 'sda': 10, 'scl': 11, 'freq': 100000,
              'address': None, 'sample_ms': 100}
-SENSOR_TEST = {'version': '0.1.0', 'loop_us': 10000, 'log_hz': 5,
-               'console_hz': 1, 'capacity': 200,
+# 0.2.0: Ganzer kurzer Sensorlauf kompakt im RAM, CSV erst nach Testende.
+# 2 Hz deckt das 1-Hz-GPS doppelt ab; Barometerpolling und Loop bleiben unveraendert.
+SENSOR_TEST = {'version': '0.2.0', 'loop_us': 10000, 'log_hz': 2,
+               'console_hz': 1, 'max_log_bytes': 65536, 'reserve_bytes': 32768,
                'reference_warmup_ms': 2000, 'reference_samples': 20}

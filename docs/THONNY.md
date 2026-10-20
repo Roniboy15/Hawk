@@ -1,14 +1,29 @@
 # Thonny: Sicherung, Upload, Kalibrierung und Achsentests
 
-**Aktueller v0.2.3-Schritt:** [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
-Die [Auswertung T1/T2](testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md)
-enthaelt einen ersten T1-Sensorfehler, eine bestandene T1-Wiederholung und einen
-USB-Stromverlustbefund. Korrigierte Stopfolge verwenden, als naechstes T3 MANUAL;
-vor weiterer Stabilisierung Sensorbefund/Timing klaeren.
-Alle 15 Firmwaremodule hochladen, vorhandene calibration.json erhalten. Danach
-die dortigen bench_test.run(...)-Aufrufe am Shell-Prompt verwenden. Kein Import-
-Autostart; Testmodi liegen nur im RAM. Die folgenden Abschnitte bleiben als
-grundlegende Inbetriebnahme-/Kalibrieranleitung bestehen.
+**Aktueller Schritt:** [GY-63/BN-180-Sensortests](SENSOREN_TEST.md) auf
+codex/gps-baro-bringup. Dafuer die dort genannten sechs Module hochladen,
+vorhandene calibration.json erhalten, AUTO_START=False. BEC/Receiver/Servos
+bleiben aus; nur MCU/Sensoren per USB. Der Sensorstarter erzeugt keine
+Neutralpulse und verhindert keine Bewegung anderweitig versorgter Servos.
+Der erste GY-63-Messlauf ist ausgewertet; S1 mit Log und bestaetigter
+Anhebereaktion funktional bestanden. GPS/S2 ist mit gps_2 samt Konsolenauszug
+ebenfalls funktional bestanden; [Auswertung](testdaten/gps_tests/AUSWERTUNG_GPS_2.md).
+S3 ist ebenfalls funktional bestanden, aber sein JSON meldet noch 0.1.0 und
+den alten 200-Zeilen-Ring: [S3-Auswertung](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
+Beim naechsten Bodenlauf sechs Module konsistent hochladen, Soft-Reboot und
+Sensor-Test **0.2.0** / JSON-Schema 2 pruefen. Das neue RAM-Log soll den ganzen
+kurzen Lauf mit 2 Hz behalten; Hardwarecheck bleibt offen.
+Keine erneute Lage-/RC-Kalibrierung allein fuer dieses Sensorupdate.
+Beim geplanten IMU-Umbau dagegen Achsenabbildung anpassen, neue Levelreferenz
+speichern und Richtungen pruefen; [genaue Einbauanleitung](EINBAU_UND_MANUAL_DATENFLUG.md).
+Neuen [USB-Startbefund](testdaten/barometer_tests/AUSWERTUNG.md)
+vor erneutem Betrieb der montierten Servos eingrenzen.
+
+T1/T2/T3/T5/T6 sind in den jeweiligen Auswertungen dokumentiert, T4 bleibt
+bewusst offen. Timing-/Fehlerdiagnose wird parallel fortgesetzt; aktueller Plan:
+[NAECHSTE_SCHRITTE.md](NAECHSTE_SCHRITTE.md). Die folgenden Abschnitte bleiben
+als grundlegende Inbetriebnahme-/Kalibrieranleitung bestehen, sind kein Auftrag
+zur erneuten Kalibrierung oder zum Start eines Servotests fuer den Sensorcheck.
 
 ## 1. Bisherige funktionierende Version sichern
 

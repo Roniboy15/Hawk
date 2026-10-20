@@ -11,5 +11,8 @@ sensors_*.json
 !docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.json
 !docs/testdaten/Tischtests_v0.2.3-bench/T6/bench_292509.csv
 !docs/testdaten/Tischtests_v0.2.3-bench/T6/bench_292509.json
+# Reviewed S3 evidence; keep all other generated sensor logs ignored.
+!docs/testdaten/S3_gps_and_baro/sensors_2344143_0.csv
+!docs/testdaten/S3_gps_and_baro/sensors_2344143_0.json
 .venv/
 .thonny/

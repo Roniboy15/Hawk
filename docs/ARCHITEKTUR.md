@@ -128,10 +128,20 @@ I2C0. Neue Einstellungen stehen in config.py; app.run() nutzt sie noch nicht.
 
 gps.py begrenzt Rahmen-/UART-Lesen und prueft GGA/RMC, Pruefsumme und Datenalter.
 Ein gemeinsamer Fix braucht gueltige frische Saetze derselben UTC-Epoche.
+Seit Sensor-Test 0.1.1 lesen Empfang und Altdatenverwerfen hoechstens die mit
+UART.any() gemeldete Menge innerhalb ihres Limits. Feste Laengen koennen auf
+RP2 trotz timeout=0 auf nachkommende Zeichen warten. Receiver-Fixzaehler bleiben
+bei Frischeverlust erhalten, waehrend die aktuelle Navigationsgueltigkeit geloescht
+wird. Hosttests pruefen das mit zeitlich eintreffenden Bytes, keine MCU-Zeitgarantie.
 ms5611.py prueft PROM-CRC, kompensiert Temperatur/Druck und wartet die ADC-
 Wandlungen ueber Zustandswechsel statt blockierendes sleep ab. sensor_test.py
 startet diese Adapter explizit ohne Receiver/PWM und exportiert einen begrenzten
-Logrest plus Laufbericht. Das ist weder Navigation noch ein vollstaendiger Fluglogger.
+Datensatz plus Laufbericht. Ab Sensor-Test 0.2.0 statt Ring ein fester gepackter
+Puffer fuer die ganze angeforderte Dauer mit standardmaessig 2 Hz: 83 Bytes je
+Sample, ca. 30 kB/180 s oder 50 kB/300 s. Groessenlimit und gemeldetes freies
+RAM inklusive Reserve vor Hardwarestart pruefen; kein stilles Ueberschreiben.
+CSV erst nach Stop erzeugen; JSON-Schema 2 nennt Kapazitaet, Speichermenge und
+all_samples_retained. Das ist weder Navigation noch ein MANUAL-Fluglogger.
 
 Naechster Integrationsschritt nach den physischen Sensorchecks: Daten gemeinsam
 mit dem bisherigen MANUAL-Durchgang aufzeichnen, Zusatzaufwand messen und einen

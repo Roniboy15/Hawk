@@ -1,28 +1,123 @@
 """Expliziter GPS-/MS5611-Test ohne Receiver, PWM oder Flugregler.
 
 run('gps'/'baro'/'both') wird vom Betreiber in der Thonny-Shell gestartet.
-RAM-Ring und Laufstatistik werden erst nach Stop/Ende exportiert. Das ist
-ein Funktionstest mit begrenztem Logrest, noch kein kompletter Fluglogger.
+Kompakter RAM-Puffer und Laufstatistik werden erst nach Stop/Ende exportiert.
+Kurze Sensorlaeufe werden vollstaendig behalten, noch kein MANUAL-Fluglogger.
 Beim blossen Import entstehen weder Hardwareobjekte noch Dateien.
 """
 import json
+import gc
 import math
 import os
+import struct
 import sys
 import config as cfg
 from diagnostics import TimingStats
-from gps import GPS
-from logger import RingLog
+from gps import GPS, _utc
 from ms5611 import MS5611, relative_altitude
 
 _running = False
 
 
-class SensorLog(RingLog):
+class SensorLog:
+    """Ein fest reservierter Datensatz je Sample; kein Ueberschreiben alter Werte.
+
+    CSV-Text entsteht erst beim Export. Koordinaten als double vermeiden eine
+    zusaetzliche float32-Rundung gegenueber dem empfangenen Python-Wert.
+    Die anderen sechs Gleitkommafelder haben die bisherige CSV-Zweidezimalanzeige.
+    """
     HEADER = ('ms,gps_valid,gga_valid,rmc_valid,utc,date,lat_deg,lon_deg,'
               'gps_alt_msl_m,ground_speed_ms,course_true_deg,course_usable,'
               'fix_quality,satellites,hdop,gga_age_ms,rmc_age_ms,baro_valid,'
               'pressure_pa,temperature_c,relative_height_m,baro_age_ms,d1,d2,period_us\n')
+    FORMAT = '<IIIBBBdd6fIiiiIIi'
+    RECORD_BYTES = struct.calcsize(FORMAT)
+    UNKNOWN_UTC = 0xffffffff
+
+    def __init__(self, capacity):
+        if type(capacity) is not int or capacity < 1:
+            raise ValueError('Sensorlog braucht eine positive Samplezahl')
+        self.capacity = capacity
+        self.data = bytearray(capacity * self.RECORD_BYTES)
+        self.count = self.total = 0
+        self.free_before_bytes = None
+
+    def append_sample(self, ms, gps, baro, period_us):
+        self.total += 1
+        if self.count >= self.capacity:
+            raise RuntimeError('Sensorlog voll; Lauf gestoppt statt alte Samples zu verlieren')
+        def number(value):
+            return float('nan') if value is None else value
+        flags = (int(bool(gps.get('valid'))) |
+                 int(bool(gps.get('gga_valid'))) << 1 |
+                 int(bool(gps.get('rmc_valid'))) << 2 |
+                 int(bool(gps.get('course_usable'))) << 3 |
+                 int(bool(baro['valid'])) << 4)
+        utc = _utc(gps['utc']) if gps.get('utc') else self.UNKNOWN_UTC
+        date = int(gps['date']) if gps.get('date') else 0
+        struct.pack_into(self.FORMAT, self.data, self.count * self.RECORD_BYTES,
+                         ms, utc, date, flags, gps.get('quality', 0), gps.get('satellites', 0),
+                         number(gps.get('lat')), number(gps.get('lon')),
+                         number(gps.get('altitude_msl_m')), number(gps.get('speed_ms')),
+                         number(gps.get('course_deg')), number(gps.get('hdop')),
+                         number(baro['temperature_c']), number(baro['relative_height_m']),
+                         baro['pressure_pa'] if baro['pressure_pa'] is not None else 0,
+                         gps.get('gga_age_ms', -1), gps.get('rmc_age_ms', -1), baro['age_ms'],
+                         baro['d1'] if baro['d1'] is not None else 0,
+                         baro['d2'] if baro['d2'] is not None else 0, period_us)
+        self.count += 1
+
+    def ordered(self):
+        def number(value):
+            return value if math.isfinite(value) else None
+        for index in range(self.count):
+            v = struct.unpack_from(self.FORMAT, self.data, index * self.RECORD_BYTES)
+            utc = ''
+            if v[1] != self.UNKNOWN_UTC:
+                seconds, fraction = divmod(v[1], 1000)
+                if seconds == 86400:  # Erlaubte NMEA-Schaltsekunde 23:59:60.
+                    utc = '235960.%03d' % fraction
+                else:
+                    hour, remainder = divmod(seconds, 3600)
+                    minute, second = divmod(remainder, 60)
+                    utc = '%02d%02d%02d.%03d' % (hour, minute, second, fraction)
+            gps = {'valid': bool(v[3] & 1), 'gga_valid': bool(v[3] & 2),
+                   'rmc_valid': bool(v[3] & 4), 'course_usable': bool(v[3] & 8),
+                   'utc': utc, 'date': '%06d' % v[2] if v[2] else '',
+                   'quality': v[4], 'satellites': v[5],
+                   'lat': number(v[6]), 'lon': number(v[7]),
+                   'altitude_msl_m': number(v[8]), 'speed_ms': number(v[9]),
+                   'course_deg': number(v[10]), 'hdop': number(v[11]),
+                   'gga_age_ms': v[15], 'rmc_age_ms': v[16]}
+            baro = {'valid': bool(v[3] & 16), 'temperature_c': number(v[12]),
+                    'relative_height_m': number(v[13]), 'pressure_pa': v[14] or None,
+                    'age_ms': v[17], 'd1': v[18] or None, 'd2': v[19] or None}
+            yield csv_row(v[0], gps, baro, v[20])
+
+    def save(self, path):
+        with open(path, 'w') as file:
+            file.write(self.HEADER)
+            for row in self.ordered():
+                file.write(row)
+
+
+def _allocate_log(duration_s):
+    """Dauer/Rate vor Hardwarestart reservieren, statt spaeter still zu kuerzen."""
+    settings = cfg.SENSOR_TEST
+    interval_ms = 1000 // settings['log_hz']
+    # Erstes Sample plus aufgerundete Dauer; eine Zeile Reserve fuer die Grenze.
+    capacity = (int(duration_s * 1000) + interval_ms - 1) // interval_ms + 1
+    needed = capacity * SensorLog.RECORD_BYTES
+    if needed > settings['max_log_bytes']:
+        raise ValueError('Sensorlog braucht %d Bytes; Dauer/log_hz verkleinern (Limit %d)' %
+                         (needed, settings['max_log_bytes']))
+    gc.collect()
+    free = gc.mem_free() if hasattr(gc, 'mem_free') else None
+    if free is not None and free >= 0 and free < needed + settings['reserve_bytes']:
+        raise MemoryError('Nicht genug RAM fuer vollstaendiges Sensorlog plus Reserve')
+    log = SensorLog(capacity)  # Auch Fragmentierung kann hier vor Hardwarestart scheitern.
+    log.free_before_bytes = free
+    return log
 
 
 def validate_settings(profile, duration_s, save):
@@ -40,7 +135,8 @@ def validate_settings(profile, duration_s, save):
             raise ValueError('Ungueltige Sensor-Testkonfiguration')
     settings = cfg.SENSOR_TEST
     integer(settings['loop_us'], 1000, 100000)
-    integer(settings['capacity'], 1, 500)
+    integer(settings.get('max_log_bytes'), 1, 262144)
+    integer(settings.get('reserve_bytes'), 8192, 131072)
     integer(settings['log_hz'], 1, min(20, 1000000 // settings['loop_us']))
     integer(settings['console_hz'], 1, settings['log_hz'])
     integer(settings['reference_samples'], 1, 100)
@@ -93,6 +189,8 @@ def _devices(profile, clock, resources):
     gps = baro = uart = None
     if profile in ('gps', 'both'):
         s = cfg.GPS
+        # RP2 erzwingt auch bei 0 einen Mindestwert fuer timeout_char.
+        # GPS.poll() liest nur die per any() gemeldete Menge, ohne neue Bytes abzuwarten.
         uart = UART(s['uart'], baudrate=s['baudrate'], tx=Pin(s['tx']), rx=Pin(s['rx']),
                     bits=8, parity=None, stop=1, timeout=0, timeout_char=0,
                     rxbuf=s['rxbuf'])
@@ -167,14 +265,14 @@ def run(profile='both', duration_s=120, save=True):
 
 def _run(profile, duration_s, save, clock):
     settings = cfg.SENSOR_TEST
-    log = SensorLog(settings['capacity'])
+    log = _allocate_log(duration_s)
     period = TimingStats(settings['loop_us'], cfg.MAX_LOOP_US)
     work = TimingStats(settings['loop_us'], cfg.MAX_LOOP_US)
     gps = baro = uart = None
     resources = {}
     started = clock.ticks_ms()
     errors, latched = {}, set()
-    summary = {'schema': 1, 'test_version': settings['version'],
+    summary = {'schema': 2, 'test_version': settings['version'],
                'control_version': cfg.VERSION, 'profile': profile,
                'purpose': 'ground_sensor_test_no_pwm', 'control_loop_timing': False,
                'configuration': {'gps': dict(cfg.GPS), 'barometer': dict(cfg.BAROMETER),
@@ -198,6 +296,7 @@ def _run(profile, duration_s, save, clock):
     try:
         gps, baro, uart = _devices(profile, clock, resources)
         print('Sensor-Test', settings['version'], profile, '- keine Servoansteuerung')
+        print('Vollstaendiges RAM-Log:', log.capacity, 'Samples,', len(log.data), 'Bytes')
         if baro:
             print('MS5611 Adresse:', hex(baro.address), 'PROM CRC OK')
         while clock.ticks_diff(clock.ticks_ms(), started) < int(duration_s * 1000):
@@ -236,7 +335,7 @@ def _run(profile, duration_s, save, clock):
                      'relative_height_m': relative_altitude(last_baro[0], reference_pa)
                      if valid and reference_pa is not None else None,
                      'd1': last_baro[2] if valid else None, 'd2': last_baro[3] if valid else None}
-                log.append(csv_row(elapsed, g, b, delta if delta is not None else 0))
+                log.append_sample(elapsed, g, b, delta if delta is not None else 0)
                 log_ms = now
                 if print_ms is None or clock.ticks_diff(now, print_ms) >= int(1000 / settings['console_hz']):
                     print('t=%d GPS fix=%s sat=%s lat=%s lon=%s age=(%s,%s) BARO p=%s Pa T=%s C h_rel=%s m' %
@@ -268,6 +367,12 @@ def _run(profile, duration_s, save, clock):
                         'duration_ms': clock.ticks_diff(clock.ticks_ms(), started),
                         'period': period.report(), 'work': work.report(),
                         'csv_rows_total': log.total, 'csv_rows_retained': log.count,
+                        'log': {'storage': 'packed_ram', 'capacity': log.capacity,
+                                'record_bytes': log.RECORD_BYTES,
+                                'allocated_bytes': len(log.data),
+                                'free_before_bytes': log.free_before_bytes,
+                                'reserve_bytes': settings['reserve_bytes'],
+                                'all_samples_retained': log.total == log.count},
                         'first_paired_fix_ms': first_fix_ms, 'gps_fix_log_samples': gps_fix_samples,
                         'barometer_samples': baro_samples, 'reference_pa': reference_pa,
                         'gps_counters': dict(gps.counters) if gps else {},

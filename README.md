@@ -20,10 +20,11 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 
 ## Start hier
 
-**Aktueller Schritt:** [SENSOREN_TEST.md](docs/SENSOREN_TEST.md): BN-180 und
-GY-63/MS5611 einzeln pruefen, dann gemeinsam. sensor_test.run('baro'/'gps'/'both')
-startet nur diesen separaten Funktionstest, ohne Servo-PWM. GPS-Pinfolge und
-Signalpegel vor dem Anschluss abgleichen. Die Firmware enthaelt noch keinen
+**Aktueller Schritt:** S1/S2/S3 sind funktional bestanden; jetzt
+[Einbau und MANUAL-Fluglogger vorbereiten](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
+[SENSOREN_TEST.md](docs/SENSOREN_TEST.md) bleibt die Anleitung fuer Wiederholungen.
+sensor_test.run('baro'/'gps'/'both') startet nur den separaten Funktionstest,
+ohne Servo-PWM. Die Firmware enthaelt noch keinen
 gemeinsamen MANUAL-Fluglogger oder Kreisregler. Der Besitzer moechte danach den
 bisherigen MCU-MANUAL-Durchgang nutzen und akzeptiert die MCU-Abhaengigkeit;
 Timing wird parallel weiter untersucht, ohne pauschale 100-Hz-Einstiegshuerde.
@@ -35,7 +36,13 @@ T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
 herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
 T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
 Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert; aktueller
-Branch codex/gps-baro-bringup. Neue Sensoren sind noch nicht physisch bestaetigt.
+Branch codex/gps-baro-bringup. Barometer/S1 ist funktional bestaetigt;
+GPS-Wiederholung gps_2 samt Konsole bestaetigt Fix und Bewegungsreaktion (S2).
+S3 bestaetigt gemeinsamen Betrieb und sauberen Stop. Sein alter Dateistand
+enthaelt nur die letzten 40.963 s; der neue 0.2.0-RAM-Puffer ist hostgeprueft,
+physisch noch zu pruefen. Hoehenspruenge im Gehlog erfordern einen Einbaucheck,
+keine Regleranpassung auf Verdacht:
+[S3-Auswertung](docs/testdaten/S3_gps_and_baro/AUSWERTUNG.md).
 [Aktuelle Auswertung](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md),
 [Vorgaengerbefunde T1/T2](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
 
@@ -52,6 +59,8 @@ Branch codex/gps-baro-bringup. Neue Sensoren sind noch nicht physisch bestaetigt
    SENSOR/MANUAL/STABILIZE-Pruefung nach Umbauten.
 9. [VERSORGUNG_WARNHINWEISE.md](docs/VERSORGUNG_WARNHINWEISE.md): beste Diagnose
    zum Versorgungsereignis und Warnhinweise fuer BEC 5 V @ 3 A / vier Servos.
+10. [EINBAU_UND_MANUAL_DATENFLUG.md](docs/EINBAU_UND_MANUAL_DATENFLUG.md):
+    Stromleisten, Sensorpins, IMU-Drehung und konkreter Logger-/Bodenlaufplan.
 
 v0.2.1 verwirft RC-Puffer bei zu langer Pollpause/vollem FIFO, bewertet Pulsalter
 konservativ und verhindert stabilisierte Kommandos nach einer erkannten
