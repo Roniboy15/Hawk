@@ -23,9 +23,12 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 **Aktueller Schritt:** S1/S2/S3 und L3-RAM-Vorprobe sind bestanden. Logger0.1.8
 hat den gezielten MANUAL-Bodenvergleich ueber4 min48 s ohne Timing-Fault oder
 erneute RC-Sperre nach Freigabe bestanden;273 Samples vollstaendig gespeichert.
-GPS empfaengt fehlerfrei, hatte in diesem Lauf aber keinen Fix. Jetzt
-Bordversorgung/bewussten Loggerstart ohne Mac vorbereiten, danach GPS-Gruen
-und etwa10 min Aufnahme in zwei Segmenten gemeinsam am Boden pruefen.
+GPS empfaengt fehlerfrei, hatte in diesem Lauf aber keinen Fix.0.1.8 ist als
+8b9adde gesichert.0.1.9 ergaenzt auf demselben Branch einen optionalen BOOT-
+Bordstart ohne Mac. B1 und kurze SENSOR-/MANUAL-Aussenlaeufe mit GPS-Fix sind
+inzwischen bestanden, ohne Fault/erneuten RC-Ausfall. Nur der etwa10-min-
+Aufnahmelauf in zwei Segmenten im endgueltigen Einbau bleibt als naechster Test.
+[0.1.9-Auswertung](docs/testdaten/fluglogger/AUSWERTUNG_019.md),
 [F2-Auswertung](docs/testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md),
 [Bedienung des Loggers](docs/FLUGLOGGER_TEST.md).
 CH3 unten/oben schaltet Aufnahme aus/ein, ohne festen Flugtimer und ohne
@@ -106,7 +109,7 @@ er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder
 | Datei in firmware/ | Aufgabe / Einstieg |
 | --- | --- |
 | config.py | Einziger Ort fuer Pins, Achsen, Grenzwerte und Reglerparameter |
-| main.py | Autostart; standardmaessig deaktiviert |
+| main.py | Default ohne Start; optionaler Loggerstart nach BOOT-Freigabe |
 | start_test.py | In Thonny ausfuehren, ruft app.run() auf |
 | bench_test.py | Explizite Tischtestprofile aus der Thonny-Shell |
 | app.py | Regelschleife und Zustandswechsel |

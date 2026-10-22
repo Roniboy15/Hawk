@@ -10,7 +10,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'firmware'))
 import config
@@ -377,6 +377,7 @@ class SessionTests(unittest.TestCase):
                                  'ground_button')
                 self.assertEqual(report['stage_timing']['max_us'],[0]*9)
                 self.assertEqual(report['runtime_gc']['count'],0)
+                self.assertEqual(report['start_method'],'explicit')
                 self.assertEqual(json.loads(Path('flight_1500_1.json').read_text())['stage_timing']['names'],
                                  list(StageTiming.NAMES))
             finally:
@@ -424,6 +425,87 @@ class LauncherTests(unittest.TestCase):
              patch('ram_buffer.RecordBuffer') as allocate:
             with self.assertRaises(ValueError): flight_start.run('stabilize')
             allocate.assert_not_called()
+
+    def test_main_default_boot_modes_and_legacy_start_are_separate(self):
+        source=(Path(__file__).resolve().parents[1]/'firmware/main.py').read_text()
+        launch, legacy = Mock(), Mock()
+        with patch.dict(sys.modules,{'flight_start':types.SimpleNamespace(run=launch),
+                                     'app':types.SimpleNamespace(run=legacy)}), \
+             contextlib.redirect_stdout(io.StringIO()):
+            for mode,auto in ((None,False),('sensor',False),('manual',False),(None,True)):
+                with self.subTest(mode=mode,auto=auto), \
+                     patch.object(config,'LOGGER_BOOT_MODE',mode), \
+                     patch.object(config,'AUTO_START',auto):
+                    launch.reset_mock(); legacy.reset_mock()
+                    exec(compile(source,'main.py','exec'),{})
+                    if mode is not None:
+                        launch.assert_called_once_with(mode,wait_for_button=True)
+                    else:
+                        launch.assert_not_called()
+                    self.assertEqual(legacy.call_count,int(auto))
+            with patch.object(config,'LOGGER_BOOT_MODE','manual'), \
+                 patch.object(config,'AUTO_START',True):
+                launch.reset_mock(); legacy.reset_mock()
+                with self.assertRaises(ValueError): exec(compile(source,'main.py','exec'),{})
+                launch.assert_not_called(); legacy.assert_not_called()
+
+    def test_boot_wait_ignores_initial_hold_and_short_press_until_released(self):
+        clock=Clock()
+        clock.us=(MOD-1000)*1000
+        started=clock.us
+        events=[]
+        led=MagicMock()
+        led.write.side_effect=lambda:events.append(clock.us-started)
+        def pressed():
+            ms=(clock.us-started)//1000
+            return ms<500 or 1000<=ms<1200 or 1300<=ms<3600
+        with patch.dict(sys.modules,{
+                'time':clock,
+                'machine':types.SimpleNamespace(Pin=Mock(OUT=1)),
+                'rp2':types.SimpleNamespace(bootsel_button=pressed),
+                'neopixel':types.SimpleNamespace(NeoPixel=Mock(return_value=led))}), \
+             contextlib.redirect_stdout(io.StringIO()):
+            flight_start._wait_for_start()
+        self.assertEqual(events,[0,3300000,3600000])
+        self.assertFalse(pressed())
+        self.assertEqual(led.__setitem__.call_args_list[-1].args,(0,(0,0,0)))
+
+    def test_boot_cancel_releases_buffer_and_never_starts_controller(self):
+        import app
+        buffer=RecordBuffer(632,144)
+        real_session=flight_logger.FlightSession
+        with patch('ram_buffer.RecordBuffer',return_value=buffer), \
+             patch.object(flight_logger,'FlightSession',side_effect=lambda b:real_session(b,Clock())), \
+             patch.object(flight_start,'_wait_for_start',side_effect=KeyboardInterrupt), \
+             patch.object(app,'run') as run:
+            with self.assertRaises(KeyboardInterrupt):
+                flight_start.run('manual',wait_for_button=True)
+        run.assert_not_called()
+        self.assertFalse(flight_start._running)
+        self.assertIsNone(flight_start._pending)
+        with self.assertRaises(RuntimeError): buffer.slot(0)
+
+    def test_boot_confirmation_follows_reservation_and_precedes_app_run(self):
+        import app
+        events=[]
+        real_buffer=RecordBuffer
+        real_session=flight_logger.FlightSession
+        def allocate(*args):
+            events.append('buffer')
+            return real_buffer(*args)
+        def wait():
+            self.assertEqual(events,['buffer'])
+            events.append('button')
+        def run(session):
+            self.assertEqual(events,['buffer','button'])
+            self.assertEqual(session.start_method,'boot_button')
+            self.assertEqual(config.START_MODE,'manual')
+        with patch('ram_buffer.RecordBuffer',side_effect=allocate), \
+             patch.object(flight_logger,'FlightSession',side_effect=lambda b:real_session(b,Clock())), \
+             patch.object(flight_start,'_wait_for_start',side_effect=wait), \
+             patch.object(app,'run',side_effect=run) as app_run:
+            flight_start.run('manual',wait_for_button=True)
+        app_run.assert_called_once()
 
     def test_pending_export_requires_verified_shutdown_and_keeps_failed_data(self):
         buffer=RecordBuffer(632,144)

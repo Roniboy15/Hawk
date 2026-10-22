@@ -1,7 +1,8 @@
 """Bewusster Einstieg: run('sensor') ohne PWM, run('manual') mit RC-Freigabe.
 
 Der Puffer MUSS vor app/Fluglogger importiert werden (L3-Nachweis). Kein Start
-beim Import, kein Autostart, kein Flugtimer. calibration.json wird nur gelesen.
+beim Import, kein Flugtimer. Optionaler Bordstart verlangt eine BOOT-Freigabe.
+calibration.json wird nur gelesen.
 """
 import config as cfg
 
@@ -9,7 +10,34 @@ _running = False
 _pending = None
 
 
-def run(profile='sensor'):
+def _wait_for_start():
+    # Erst nach Puffer/Imports und FlightSession-Pinpruefung aufrufen. Vor dem
+    # App-Start gibt es weder RC-PIO noch Servo-PWM; BOOT kann nichts abwuergen.
+    import time
+    from machine import Pin
+    from rp2 import bootsel_button
+    from neopixel import NeoPixel
+    from flight_records import GroundStop
+    s = cfg.FLIGHT_LOGGER
+    button = GroundStop(time.ticks_diff, s['stop_hold_ms'])
+    led = NeoPixel(Pin(s['led_pin'], Pin.OUT), 1)
+    try:
+        led[0] = (s['led_brightness'], 0, s['led_brightness'])
+        led.write()
+        print('Bordstart: BOOT loslassen, dann 2 s halten; bei Weiss loslassen.')
+        while not button.update(bool(bootsel_button()), True, time.ticks_ms()):
+            time.sleep_ms(s['button_poll_ms'])
+        led[0] = (s['led_brightness'],)*3
+        led.write()
+        # Gehaltener Starttaster darf nicht bis in den laufenden Logger reichen.
+        while bootsel_button():
+            time.sleep_ms(s['button_poll_ms'])
+    finally:
+        led[0] = (0, 0, 0)
+        led.write()
+
+
+def run(profile='sensor', wait_for_button=False):
     global _running, _pending
     if profile not in ('sensor', 'manual') or cfg.AUTO_START is not False:
         raise ValueError('Expliziter Logger-Bodeneinstieg: sensor/manual, AUTO_START=False')
@@ -30,6 +58,9 @@ def run(profile='sensor'):
         from flight_logger import FlightSession
         import app
         session = FlightSession(buffer)
+        if wait_for_button:
+            _wait_for_start()
+            session.start_method = 'boot_button'
         cfg.START_MODE, cfg.SAVE_LOG_ON_STOP, cfg.CONSOLE_HZ = profile, False, 1
         return app.run(session=session)
     finally:

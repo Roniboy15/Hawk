@@ -413,6 +413,33 @@ See F2_gc_018/AUSWERTUNG.md. Next secure this stand, plan MCU supply/intentional
 logger boot without Mac, then combined GPS-ready/10-min two-segment ground run.
 Do not imply AUTO_START=True already starts the flight logger.
 
+Owner update2026-10-22: checkpoint8b9adde committed with197 passing tests;
+stay on codex/manual-flight-logger for requested standalone logger startup.
+0.1.9 adds LOGGER_BOOT_MODE=None/sensor/manual; AUTO_START=False still required
+for logger. Optional wait occurs after early buffer/imports/pin validation,
+before app hardware. Purple waits for release/2-s-BOOT/release, white confirms,
+then normal gyro calibration/RC neutral gate. Reuses GroundStop; no loop change.
+JSON start_method is boot_button or explicit.201 host tests, four changed
+files compile on MicroPython1.29/Unix; board RAM reserve/start not yet qualified.
+Owner chooses regulated BEC5 V at board input for MCU. Before Mac-USB physically
+disconnect MCU5 V from BEC/servo rail; battery-off alone can still backfeed from
+USB. First B1 in SENSOR with servo supplies disconnected; then MANUAL F3 GPS/
+ten-minute two-segment ground test. See docs/BORDSTART_LOGGER.md. Do not flash,
+operate hardware, lower reserve or assume Soaring is already implemented.
+
+0.1.9 owner results2026-10-22: two B1 reports plus outdoor SENSOR176.465 s
+and MANUAL265.652 s archived; all boot_button, clean export, no faults/trips.
+MANUAL after581-ms enable continuous,573 axis mappings exact; all191 rows have
+GPS fix/ready,9..12 satellites,HDOP1.01..2.02, no GPS errors/poll gaps. Boot
+reserve66992/67088 B verified; electrical rail quality not logged. Owner reports
+no felt control outage, uphill walk/hand orientation adjusted to commands.
+MANUAL records only190.294 s in two segments (93+94 samples),19.614-s pause;
+10-min recording NOT yet tested. No gain/aerodynamic validation from carrying
+Hawk, no absolute yaw from slow GPS course. See AUSWERTUNG_019.md. No new
+firmware needed; next one10-min combined ground run in final installation,
+then reassess first MANUAL data flight. Owner now explicitly authorizes the
+0.1.9 checkpoint commit with these test reports; stay on the same branch.
+
 ## Working boundaries
 
 Keep changes small and preserve the separation of pure mathematics, hardware

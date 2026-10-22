@@ -1,7 +1,25 @@
 # Validierung — v0.2.3-bench
 
-Letzter Hostlauf am 2026-10-22: 197 automatische Tests bestanden, CPython 3.9.6
-(106 Steuerungs-, 37 Sensor-, 30 Logger-/Puffer- und 24 Flugloggertests).
+Letzter Hostlauf am 2026-10-22: 201 automatische Tests bestanden, CPython 3.9.6
+(106 Steuerungs-, 37 Sensor-, 30 Logger-/Puffer- und 28 Flugloggertests).
+
+Neue physische0.1.9-Nachweise: zwei B1 plus SENSOR176.465 s und MANUAL265.652 s
+draussen mit GPS. Alle BOOT-Start/Export sauber, keine Faults/Timing-Trips;
+MANUAL keine erneute RC-Sperre nach Freigabe,573 gespeicherte Achsenwerte exakt.
+Alle191 MANUAL-Zeilen mit GPS-Fix/ready.187 Samples in zwei Segmenten sind nur
+190.294 s Aufnahme; Zehn-Minuten-Test weiter offen. Tragen/Handneigen belegt
+keine Flug-Gains oder aerodynamische Reaktion. Nur Dokumentation/Rohdatenauswahl
+geaendert, keine neue Firmware oder Host-Regressionsrunde.
+[Auswertung](testdaten/fluglogger/AUSWERTUNG_019.md).
+
+0.1.9 ergaenzt den optionalen BOOT-Bordstart auf demselben Branch. Vier neue
+Tests sichern Default-/Legacy-/Logger-Routing und Konfliktsperre, anfaenglich
+gehaltenen/kurzen Taster sowie2-s-Halten/Loslassen ueber Tick-Umlauf, Abbruch
+mit Pufferfreigabe und Startreihenfolge. Export nennt start_method. Vier
+geaenderte Firmwaredateien kompilieren unter MicroPython1.29/Unix; keine
+Hardwareausfuehrung/Reserve- oder BEC-Qualifikation dadurch. Der spaetere B1-
+Nachweis steht oben; jetzt nur langen Aufnahmelauf ergaenzen. Defaults bleiben
+AUTO_START=False, START_MODE='sensor', LOGGER_BOOT_MODE=None.
 
 Physischer F2-0.1.8-Vergleich jetzt bestanden:288.274 s ohne Timing-/Fault-
 oder erneute RX-Sperre nach Aktivierung. Max45.709 ms,273 Samples/275 Zeilen

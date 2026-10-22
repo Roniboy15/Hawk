@@ -13,6 +13,9 @@ Die Vorzeichen von Sender und Rudern werden getrennt konfiguriert.
 
 VERSION = '0.2.3-bench'
 AUTO_START = False
+# Bewusster Logger-Bordstart: None = aus; 'sensor'/'manual' wartet auf BOOT.
+# AUTO_START bleibt False. Fuer den ersten BEC-Test 'sensor' waehlen.
+LOGGER_BOOT_MODE = None
 # Besitzer meldet am 2026-10-13 alle Achsentests bestanden. Gespeicherter Stand
 # startet zur erneuten Sichtpruefung ohne PWM; STABILIZE bewusst am Tisch waehlen.
 START_MODE = 'sensor'              # sensor / manual / stabilize
@@ -95,7 +98,7 @@ SENSOR_TEST = {'version': '0.2.0', 'loop_us': 10000, 'log_hz': 2,
 # GP14 ist im bisherigen Plan frei; vor Anschluss 3V3-Signalpegel pruefen.
 # L1 vom 2026-10-21: unten 998 us, oben 1998 us; Zuordnung vom Besitzer
 # bestaetigt. Die Schwellen liegen mit Abstand innerhalb der Endbereiche.
-# Nur via flight_start angebunden; der bisherige App-/main-Start bleibt gleich.
+# Nur via flight_start angebunden, auch beim optionalen Logger-Bordstart.
 RECORDING_CHANNEL = {'pin': 14, 'low_us': 1200, 'high_us': 1800,
                      'hold_ms': 200, 'sign': 1}
 LOGGER_BENCH = {'version': '0.1.4', 'channel_pin': RECORDING_CHANNEL['pin'], 'poll_us': 10000,
@@ -108,10 +111,10 @@ LOGGER_BENCH = {'version': '0.1.4', 'channel_pin': RECORDING_CHANNEL['pin'], 'po
                 # Datenmenge/Reserve bleiben gleich; kein Flug-Abschalttimer.
                 'ram_records_per_block': 16}
 
-# Explizit via flight_start.run('sensor'/'manual'), niemals vom main-Autostart.
+# Explizit via flight_start oder BOOT-Freigabe mit LOGGER_BOOT_MODE.
 # Besitzerwahl: 1-Hz-Basisdaten, CH3 Start/Pause, BOOT nach Landung zum Export.
 # 632 Records sind Kapazitaet, kein Timer; Ereignisse verbrauchen ebenfalls Slots.
-FLIGHT_LOGGER = {'version': '0.1.8', 'capacity': 632, 'record_bytes': 144,
+FLIGHT_LOGGER = {'version': '0.1.9', 'capacity': 632, 'record_bytes': 144,
                  'records_per_block': 16, 'sample_ms': 1000,
                  'reserve_bytes': 65536, 'flash_reserve_bytes': 131072,
                  # Start-GC ca. 24 ms: Bereinigung nach kurzen Iterationen planen,

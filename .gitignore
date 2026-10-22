@@ -64,5 +64,14 @@ logger_ram_*.json
 # 0.1.8: erster MANUAL-Vergleich ohne Timing- oder RC-Unterbrechung.
 !docs/testdaten/fluglogger/F2_gc_018/flight_813555_0.json
 !docs/testdaten/fluglogger/F2_gc_018/flight_813555_0.csv
+# 0.1.9: ausgewerteter BOOT-Start und Freiluftlaeufe mit GPS-Fix.
+!docs/testdaten/fluglogger/B1_bordstart_019/flight_55245_0.json
+!docs/testdaten/fluglogger/B1_bordstart_019/flight_55245_0.csv
+!docs/testdaten/fluglogger/B1_bordstart_019/flight_224687_0.json
+!docs/testdaten/fluglogger/B1_bordstart_019/flight_224687_0.csv
+!docs/testdaten/fluglogger/F3_gps_dauer_sensor_019/flight_242896_0.json
+!docs/testdaten/fluglogger/F3_gps_dauer_sensor_019/flight_242896_0.csv
+!docs/testdaten/fluglogger/F3_gps_dauer_manual_019/flight_284513_0.json
+!docs/testdaten/fluglogger/F3_gps_dauer_manual_019/flight_284513_0.csv
 .venv/
 .thonny/

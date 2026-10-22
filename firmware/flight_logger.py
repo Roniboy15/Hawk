@@ -19,6 +19,7 @@ class FlightSession:
     def __init__(self, buffer, clock=time):
         self.buffer, self.clock = buffer, clock
         self.settings = dict(cfg.FLIGHT_LOGGER)
+        self.start_method = 'explicit'
         s = self.settings
         if s['record_bytes'] != RECORD_BYTES or buffer.record_bytes != RECORD_BYTES:
             raise ValueError('Flugrecordformat passt nicht zum reservierten Puffer')
@@ -357,6 +358,7 @@ class FlightSession:
             raise OSError('Keine freie Fluglog-Dateinummer')
         report = dict(metadata)
         report.update(schema=1, logger_version=self.settings['version'],
+                      start_method=self.start_method,
                       logger_configuration=self.settings, recording_channel=dict(cfg.RECORDING_CHANNEL),
                       gps_configuration=dict(cfg.GPS), barometer_configuration=dict(cfg.BAROMETER),
                       shutdown_ok=True, stop_reason=reason, csv_file=stem+'.csv',

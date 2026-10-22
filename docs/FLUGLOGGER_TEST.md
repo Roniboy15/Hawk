@@ -1,25 +1,27 @@
-# Gemeinsamer MANUAL-Logger 0.1.8: Heap rechtzeitig pruefen
+# Gemeinsamer MANUAL-Logger: 0.1.9 mit Bordstart und GPS getestet
 
-**Aktueller Befund:** F2 0.1.8 hat den gezielten MANUAL-Bodenvergleich bestanden:
-4 min48 s ohne Timing-Fault oder erneute RC-Sperre nach Aktivierung.
-Maximale Periode45.709 ms,273 Samples/275 Zeilen vollstaendig, Export sauber.
-Geplante GC1770-mal, maximal24.656 ms. Kein Sensorfehler, aber GPS ohne Fix.
-[Auswertung](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md).
-Kein weiterer Firmwarewechsel fuer diesen Befund;197 Hosttests im letzten
-Firmwarelauf bestanden. Fixlast, zehn Minuten Aufnahme und selbststaendiger
-Bordstart bleiben offen; keine pauschale Garantie aus einem Bodenlauf.
+**Aktueller Befund:** B1 zweimal sowie SENSOR/MANUAL draussen mit GPS-Fix
+funktional bestanden. Alle Laeufe ohne Fault/Timing-Trip, mit BOOT-Start und
+sauberem Export. MANUAL nach Startfreigabe ohne erneute RC-Sperre, maximal
+45.656 ms; zwei Segmente mit187 Samples vollstaendig. Besitzer bemerkte keinen
+Aussetzer. [Auswertung](testdaten/fluglogger/AUSWERTUNG_019.md).
+Kein weiterer Firmwarewechsel noetig. Zehn Minuten Aufnahme bleiben offen:
+MANUAL-Gesamtlauf4 min26 s, davon nur3 min10 s Aufnahme.201 Hosttests im letzten
+Firmwarelauf bestanden; keine pauschale Garantie aus diesen Bodenlaeufen.
 
-## Jetzt konkret: Stand sichern, Bordstart vorbereiten, dann F3
+## Jetzt konkret: nur noch den Zehn-Minuten-Aufnahmelauf ergaenzen
 
-Auf codex/manual-flight-logger den Loggerstand mit ausgewerteten Nachweisen
-als pruefbaren Commit sichern (Besitzerfreigabe einholen). Kein Merge nach main
-und kein neuer Branch allein fuer einen Testlauf. Ein neuer Branch vom selben
-Commit ist sinnvoll fuer die folgende Aenderung an Versorgung/Bordstart.
+Logger0.1.8 ist als8b9adde gesichert. Auf ausdruecklichen Besitzerwunsch bleiben
+wir auf codex/manual-flight-logger.0.1.9 ergaenzt nur den optionalen bewussten
+Bordstart;201 Hosttests bestehen, Bedienung/Reserve jetzt auch auf dem Board
+bestaetigt. BEC-Spannungsqualitaet wurde nicht gemessen.
 
-Fuer Betrieb ohne Mac zuerst MCU-Versorgung und bewussten Start des Loggers
-festlegen/implementieren. AUTO_START=True startet derzeit den alten Controller;
-bei alleiniger USB-Versorgung beendet Abziehen des Kabels den Lauf ohne Export.
-Bis diese Vorbereitung steht, kein erneuter unveraenderter F2 erforderlich.
+Keine erneuten B1-/SENSOR-/kurzen MANUAL-Versuche erforderlich. Auf dem Board
+den funktionierenden0.1.9-Stand beibehalten, LOGGER_BOOT_MODE='manual',
+AUTO_START=False. Im endgueltigen Einbau nach der folgenden Folge insgesamt
+etwa10 min aufnehmen. Fuer USB weiterhin die5-V-Verbindung zum MCU trennen,
+nicht nur Batterie ausschalten; [Bordstart-/Versorgungsfolge](BORDSTART_LOGGER.md).
+Vorherige F3-Dateien behalten, neuen Lauf in eigenem Unterordner sichern.
 
 Anschliessend F3 am Boden mit unveraenderten Gains/Zeichen:
 
@@ -30,13 +32,13 @@ Anschliessend F3 am Boden mit unveraenderten Gains/Zeichen:
 4. Erneut oben fuer etwa5 min, danach unten und BOOT2 s. Das ist eine
    Testdauer, kein neuer automatischer Abschalttimer im Programm.
 5. Export abwarten, danach Versorgung abschalten. CSV/JSON/Konsole unter
-   docs/testdaten/fluglogger/F3_gps_dauer_018/ sichern. Bei Aussetzer/Fehler
+   docs/testdaten/fluglogger/F3_gps_dauer_019/ sichern. Bei Aussetzer/Fehler
    vorher sauber abbrechen. Keine Stromverlustversuche.
 
 Ziel: zwei vollstaendige Segmente ohne Fault/RC-Sperre, gueltige frische GPS-
 Positionen und IMU-/Barowerte, kein full und sauberer Export nach etwa10 min
-Aufnahme. GPS-Datenlast mit Fix ist durch den bisherigen Indoorlauf nicht
-abgedeckt. Steuerschrittigkeit/gefuehlte Latenz zusaetzlich als Beobachtung
+Aufnahme. GPS-Datenlast mit Fix ist im kurzen0.1.9-Aussenlauf abgedeckt; zehn
+Minuten Gesamtspeicherung noch nicht. Steuerschrittigkeit/gefuehlte Latenz zusaetzlich als Beobachtung
 notieren;1-Hz-Daten messen keine schnellen Reaktionen.
 
 L3 0.1.4 hat bestanden: 91008 B in 40 Bloecken, Inhalt geprueft, nach allen
@@ -107,14 +109,15 @@ bei ruhendem Hawk wird anhand des Rohsatzes eingegrenzt.
 
 Der beobachtete Steueraussetzer trat im0.1.8-Vergleich nicht mehr auf.
 GPS-Fix/Gruen, etwa zehn Minuten Aufnahme sowie
-Bordversorgung/Start ohne Mac stehen weiterhin aus. AUTO_START=True startet
+Bordversorgung/BOOT-Start sind jetzt implementiert, physisch noch offen. AUTO_START=True startet
 in main.py den bisherigen Controller, nicht den Logger. USB-Abziehen verliert
 bei USB-Versorgung RAM; BEC-/USB-5-V-Quellen nicht parallel verbinden.
 
 ## Was diese Version tut
 
 - flight_start reserviert zuerst 632 * 144 B, dann importiert er Fluglogger/app.
-  Nur explizites run('sensor') oder run('manual'); kein Start beim Import.
+  Explizites run('sensor')/run('manual') oder optionaler BOOT-Bordstart;
+  kein Start beim Import. LOGGER_BOOT_MODE=None ist der Standard.
 - CH3 unten (998 us) pausiert, oben (1998 us) startet ein neues Segment.
   200 ms bestaetigen, beim Start zuerst unten; Mitte behaelt den Zustand.
 - Keine Aufnahmezeitgrenze. Volle Kapazitaet stoppt nur Aufnahme, kein
@@ -142,6 +145,8 @@ bei USB-Versorgung RAM; BEC-/USB-5-V-Quellen nicht parallel verbinden.
 
 | Anzeige | Bedeutung |
 | --- | --- |
+| Violett dauerhaft, vor Start | Bordstart wartet auf bewussten BOOT-Druck |
+| Weiss, vor Start | BOOT bestaetigt; loslassen, dann Gyro-Kalibrierung ruhig abwarten |
 | Rot dauerhaft | Keine Aufnahme, GPS noch nicht bereit |
 | Gruen dauerhaft | Keine Aufnahme, GPS bereit |
 | Rot/Gruen blinkend, etwa 2 Hz | Aufnahme, GPS entsprechend nicht bereit/bereit |
@@ -223,8 +228,8 @@ und BOOT-Abfrage/LED-Timing bleiben weitere gezielte Bodenpruefungen; sie sind
 im kurzen F2 nicht automatisch mitgeprueft. Keine abrupten Stromverlustversuche
 an montierten Rudern.
 
-Danach Bordversorgung und bewussten Start ohne Mac festlegen/testen, erst dann
-erster MANUAL-Datenflug. AUTO_START jetzt nicht einschalten: main.py startet
+Danach Bordversorgung und bewussten Start ohne Mac nach BORDSTART_LOGGER.md testen,
+erst dann erster MANUAL-Datenflug. AUTO_START nicht einschalten: main.py startet
 weiter den bisherigen Controller, nicht den neuen Logger. Kein Mischen neuer
 Gains, IMU-Umbau und Erstflug desselben Teststands.
 

@@ -6,12 +6,15 @@ L3-RAM-Vorprobe ist inzwischen bestanden. Ein expliziter MANUAL-Loggerprototyp
 1-Hz-Logger mit CH3 Start/Pause und BOOT-Bodenstop ist vorhanden. F2 0.1.8
 hat den gezielten MANUAL-Bodenvergleich ueber288.274 s ohne Timing-/RC-
 Unterbrechung nach Freigabe bestanden. GPS hat in diesem Lauf keinen Fix.
-Naechster Schritt: Stand sichern, MCU-Bordversorgung/bewussten Loggerstart
-ohne Mac vorbereiten, dann kombinierter GPS-/10-min-Bodentest:
+Stand0.1.8 ist als8b9adde gesichert.0.1.9 ergaenzt den optionalen bewussten
+Loggerstart. B1 und kurze SENSOR-/MANUAL-Aussenlaeufe mit GPS-Fix sind inzwischen
+bestanden. Naechster Schritt: nur noch etwa10 min Aufnahme in zwei Segmenten
+im endgueltigen Einbau. [0.1.9-Auswertung](testdaten/fluglogger/AUSWERTUNG_019.md),
 [aktueller Befund](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md),
 [Testanleitung](FLUGLOGGER_TEST.md).
 Die folgenden Punkte enthalten den urspruenglichen Einbau-/Implementierungsplan;
-Standalone-Bordstart und physischer Gesamtnachweis stehen weiterhin aus.
+Standalone-Bordstart/Startreserve/kurzer Fixbetrieb sind physisch bestaetigt;
+Aufnahmedauer und gemessene BEC-Spannungsqualitaet sind noch offen.
 Keine neue Stabilisierung oder autonome Kreisfuehrung.
 Die akzeptierte MCU-Abhaengigkeit des bisherigen MANUAL-Durchgangs bleibt.
 
@@ -28,6 +31,11 @@ die Minusleiste ist gemeinsam. Leitungen/Stecker dauerhaft beschriften.
 | BN-180 GPS | Geregelte 5 V, gemeinsame Masse | Beitian nennt 3.6..5.5 V, typisch 5 V; 3V3 liegt darunter |
 | Empfaenger / vier Servos | BEC 5 V, gemeinsame Masse | Zulassung der konkreten Komponenten beachten; Lastreserve messen |
 | RP2040-Zero an Bord | Geeignete geregelte Quelle am dafuer vorgesehenen 5-V-Eingang | Versorgungspfad und spaeteren USB-Anschluss vorher festlegen |
+
+Besitzerentscheidung fuer B1: geregelter BEC-Ausgang am5-V-Eingang des Boards.
+Fuer Mac-USB die **5-V-Verbindung zum MCU physisch trennen**, nicht nur die
+Batterie abschalten: sonst kann USB die Servoverteilung rueckwaerts speisen.
+Die genaue Reihenfolge steht in BORDSTART_LOGGER.md.
 
 **Nicht verbinden:** 7.4-V-Batterie direkt mit 5-V-/3V3-Verbrauchern; 5 V mit
 3V3; Ausgaenge verschiedener Regler miteinander. Die 3V3-Leiste kommt vom

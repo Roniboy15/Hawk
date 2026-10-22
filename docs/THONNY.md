@@ -1,5 +1,13 @@
 # Thonny: Sicherung, Upload, Kalibrierung und Achsentests
 
+**Aktuell0.1.9:** Optionaler Bordstart auf demselben Branch, siehe
+[BORDSTART_LOGGER.md](BORDSTART_LOGGER.md). main.py/config.py/flight_start.py/
+flight_logger.py hochladen, calibration.json erhalten. AUTO_START=False,
+LOGGER_BOOT_MODE='sensor' fuer den ersten BEC-Test ohne Servostrom; BOOT2 s
+und bei Weiss loslassen. Default None laesst den bisherigen USB-/Thonny-Start
+unveraendert. Fuer USB-Datentransfer zuerst die BEC-5-V-Verbindung zum MCU
+physisch trennen, damit USB nicht die Servo-Verteilung rueckwaerts versorgt.
+
 **Neu auf codex/manual-flight-logger:** L3 0.1.4 bestanden. Jetzt Logger 0.1.0
 gemeinsam im SENSOR-Profil pruefen: [FLUGLOGGER_TEST.md](FLUGLOGGER_TEST.md).
 Alle Pythondateien aktualisieren, calibration.json erhalten, Soft-Reboot.

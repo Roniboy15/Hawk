@@ -258,7 +258,21 @@ nur Aufnahme. Nach bestaetigtem PWM-/Steuer-PIO-/Aux-PIO-/UART-Stop folgen CSV/J
 Bei Exportfehler bleibt der Puffer in flight_start._pending referenziert;
 save_pending ist ohne bestaetigten Stop gesperrt und nutzt neue Dateinummern.
 Reale Startup-Reserve, BOOT-/LED-Kosten und Gesamtloop werden in F1/F2 geprueft:
-[Testanleitung](FLUGLOGGER_TEST.md). Kein eigentlicher Bord-Autostart eingerichtet.
+[Testanleitung](FLUGLOGGER_TEST.md).
+Optionaler Bordstart0.1.9: main waehlt LOGGER_BOOT_MODE (None/sensor/manual),
+fordert weiter AUTO_START=False und ruft flight_start mit wait_for_button=True.
+Puffer/Imports und Session-Pinpruefung erfolgen vor der violetten Startanzeige;
+App-/Sensor-/RC-PIO-/PWM-Start erst nach Loslassen,2-s-Druck und erneutem
+Loslassen des BOOT-Tasters. GroundStop wird wiederverwendet, keine zweite
+Taster-Zustandsmaschine. Neue JSON-Angabe start_method ist boot_button oder
+explicit. Default/Thonny-Pfad und laufender Steuerloop bleiben unveraendert.
+
+Spaetere Navigation/Soaring braucht keine komplette Rohdatenhistorie: aktueller
+Zustand, begrenzte Filterhistorie und kompakte Thermikparameter koennen im RAM
+bleiben. Zusammenfassungen frueherer Fluege vor Steuerungsstart laden und erst
+nach Stop aktualisieren. Das ist ein Architekturziel, noch keine Implementierung
+oder Laufzeitzusage. Kontinuierliches Logging bleibt optional; Navigations- und
+Regelfehler sind dagegen unmittelbar flugwirksam und separat zu validieren.
 
 Code und Kalibrierdatei bleiben im Board-Flash (2 MB insgesamt, Firmware
 benoetigt einen Teil). RAM ist 264 KB inklusive MicroPython. Ein fester

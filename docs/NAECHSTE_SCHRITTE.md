@@ -104,13 +104,20 @@ automatischer Bereinigung zwischen den Pruefungen zuvorzukommen.
 oder erneute RC-Sperre nach Freigabe, maximal45.709 ms.273 Samples und Export
 vollstaendig, GPS empfaengt, hat aber keinen Fix. Keine weitere Firmware-
 aenderung fuer diesen Befund. [Befund](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md).
-**Jetzt Stand sichern**, dann MCU-Bordversorgung/bewussten Loggerstart ohne
-Mac vorbereiten. Danach GPS-Gruen und etwa10 min Aufnahme in zwei Segmenten
-gemeinsam am Boden pruefen; konkreter Ablauf im [Testdokument](FLUGLOGGER_TEST.md).
+**Stand als8b9adde gesichert.** Auf Besitzerwunsch auf demselben Branch bleiben.
+0.1.9-BOOT-Start, B1, SENSOR und MANUAL draussen mit GPS sind jetzt funktional
+bestanden. Keine Aussetzer/Faults, alle MANUAL-Daten vollstaendig, GPS-ready.
+MANUAL lief4 min26 s, Aufnahme zusammen nur3 min10 s. **Jetzt nur den langen
+Aufnahmelauf im endgueltigen Einbau ergaenzen:** etwa10 min in zwei Segmenten,
+gleiche Firmware/Gains, geordnet exportieren. Keine kurzen Einzeltests nochmals.
+[Auswertung](testdaten/fluglogger/AUSWERTUNG_019.md),
+konkreter Ablauf im [Testdokument](FLUGLOGGER_TEST.md).
 [Diagnosebericht](testdaten/fluglogger/F1_timing/AUSWERTUNG.md).
 [F1-Befund/naechster Schritt](testdaten/fluglogger/F1_sensor/AUSWERTUNG.md),
 [Bedienfolge](FLUGLOGGER_TEST.md). F2 nicht unveraendert wiederholen. Kein neuer L3.
-Autostart und eigenstaendiger Bordstart sind noch nicht eingerichtet.
+LOGGER_BOOT_MODE aktiviert den bewussten Bordstart; Default None und AUTO_START=False
+bleiben erhalten. B1/Startreserve sind bestaetigt; BEC-Spannungsqualitaet
+wurde durch die vorhandenen Daten nicht gemessen.
 
 Nach S1/S2/S3 bauen wir auf den bisherigen MANUAL-Durchgang auf. Der separate
 Sensorstarter steuert keine Ruder und ist daher noch kein MANUAL-Flugprogramm.
