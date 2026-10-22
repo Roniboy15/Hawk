@@ -20,12 +20,28 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 
 ## Start hier
 
-**Aktueller Schritt:** S1/S2/S3 sind funktional bestanden; jetzt
-[Einbau und MANUAL-Fluglogger vorbereiten](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
+**Aktueller Schritt:** S1/S2/S3 und L3-RAM-Vorprobe sind bestanden. Logger0.1.8
+hat den gezielten MANUAL-Bodenvergleich ueber4 min48 s ohne Timing-Fault oder
+erneute RC-Sperre nach Freigabe bestanden;273 Samples vollstaendig gespeichert.
+GPS empfaengt fehlerfrei, hatte in diesem Lauf aber keinen Fix. Jetzt
+Bordversorgung/bewussten Loggerstart ohne Mac vorbereiten, danach GPS-Gruen
+und etwa10 min Aufnahme in zwei Segmenten gemeinsam am Boden pruefen.
+[F2-Auswertung](docs/testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md),
+[Bedienung des Loggers](docs/FLUGLOGGER_TEST.md).
+CH3 unten/oben schaltet Aufnahme aus/ein, ohne festen Flugtimer und ohne
+den MANUAL-Durchgang zu beenden. L1/L2 sind ausgewertet: CH3 998..1998 us,
+Dateien korrekt, Flash aber bis 181.709 ms blockierend. L3 0.1.4 bestaetigt
+fruehe Pufferreservierung: 91008 B in 40 Bloecken, nach Imports 68656 B frei.
+Besitzer waehlt 1 Hz und BOOT fuer Bodenstop. Neuer expliziter Logger ist
+hostgeprueft: CH3 Start/Pause, GPS-LED, BOOT 2 s nach Landung und Export erst
+nach PWM/PIO/UART-Stop. Keine Wiederholung von L3, kein Autostart eingeschaltet.
+[L1/L2-Ergebnis](docs/testdaten/logger_boden/AUSWERTUNG_L1_L2.md).
+[L3-Ergebnis und Aenderung](docs/testdaten/logger_boden/AUSWERTUNG_L3.md).
+[Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
 [SENSOREN_TEST.md](docs/SENSOREN_TEST.md) bleibt die Anleitung fuer Wiederholungen.
 sensor_test.run('baro'/'gps'/'both') startet nur den separaten Funktionstest,
-ohne Servo-PWM. Die Firmware enthaelt noch keinen
-gemeinsamen MANUAL-Fluglogger oder Kreisregler. Der Besitzer moechte danach den
+ohne Servo-PWM. Der gemeinsame Logger ist in SENSOR und MANUAL am Boden geprueft;
+ein Kreisregler ist nicht implementiert. Der Besitzer moechte den
 bisherigen MCU-MANUAL-Durchgang nutzen und akzeptiert die MCU-Abhaengigkeit;
 Timing wird parallel weiter untersucht, ohne pauschale 100-Hz-Einstiegshuerde.
 
@@ -35,8 +51,9 @@ wie erwartet; die Daten bestaetigen Stabilisierung und PITCH_RANGE-Verriegelung.
 T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
 herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
 T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
-Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert; aktueller
-Branch codex/gps-baro-bringup. Barometer/S1 ist funktional bestaetigt;
+Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert,
+Sensorabschluss als e177cb5 auf codex/gps-baro-bringup. Aktueller Branch ist
+codex/manual-flight-logger. Barometer/S1 ist funktional bestaetigt;
 GPS-Wiederholung gps_2 samt Konsole bestaetigt Fix und Bewegungsreaktion (S2).
 S3 bestaetigt gemeinsamen Betrieb und sauberen Stop. Sein alter Dateistand
 enthaelt nur die letzten 40.963 s; der neue 0.2.0-RAM-Puffer ist hostgeprueft,
@@ -106,6 +123,12 @@ er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder
 | gps.py | Begrenzter NMEA-Empfang mit Pruefsumme, Fixstatus und Datenalter |
 | ms5611.py | PROM-CRC, Druck-/Temperaturkompensation, ADC-Zustandsfolge |
 | sensor_test.py | Separater GPS-/Barometertest und begrenzter CSV-/JSON-Export |
+| recording.py | Reine CH3-Aufnahmeschaltlogik fuer die optionale Logger-Session |
+| logger_bench.py | Explizite CH3-/Flash-Bodenmessungen, keine Servoausgabe |
+| ram_buffer.py | Frueh reservierte Bloecke fuer ganze Records |
+| flight_start.py | Explizit run('sensor'/'manual'), Puffer vor grossen Imports |
+| flight_logger.py | CH3, GPS/Baro, LED/BOOT, Export nach bestaetigtem Stop |
+| flight_records.py | 144-B-Encoder, 46 CSV-Spalten und reine Bodenstop-Logik |
 
 Alle Python-Dateien enthalten am Anfang Aufgabe, Hauptfunktionen und Logik.
 Tests und Dokumentation gehoeren auf den Mac, nicht auf den MCU.

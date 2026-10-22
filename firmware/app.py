@@ -25,7 +25,7 @@ from receiver import Receiver, normalize
 from control import AxisController, Gate, select_mode
 from outputs import Outputs
 from logger import RingLog
-from diagnostics import BenchDiagnostics, rx_snapshot
+from diagnostics import BenchDiagnostics, StageTiming, rx_snapshot
 
 
 def _number(name, value, low=None, high=None, integer=False):
@@ -149,8 +149,10 @@ def run_metadata(data):
         'calibration': data}
 
 
-def run():
+def run(session=None):
     validate_config()
+    if session is not None and cfg.START_MODE not in ('sensor', 'manual'):
+        raise ValueError('Erster Fluglogger unterstuetzt nur SENSOR/MANUAL')
     data = load(cfg.CALIBRATION_FILE)
     level = data.get('level')
     if level:
@@ -163,8 +165,17 @@ def run():
         if cfg.START_MODE == 'stabilize' and not reference_ok:
             raise RuntimeError('Zuerst calibrate_level.py ausfuehren')
     receiver, outputs, imu = None, None, None
-    log = RingLog(cfg.LOG_CAPACITY)
+    # Flugsession besitzt einen ganzen Aufnahme-Puffer; keinen zweiten
+    # Text-Ring parallel fuellen. Der bisherige Benchpfad bleibt unveraendert.
+    log = RingLog(cfg.LOG_CAPACITY) if session is None else None
     diagnostics = BenchDiagnostics(cfg.LOOP_US, cfg.MAX_LOOP_US, cfg.EVENT_CAPACITY)
+    # Vorhandene Phasenmessung auch in MANUAL: F2 hatte einen Steueraussetzer,
+    # dessen langsamer Abschnitt ohne diese Diagnose unbekannt bleibt.
+    # Feste Messfelder vor der RAM-Reservepruefung erzeugen.
+    # Alle Messkosten bleiben in Work/Period; keine Aenderung der Deadline.
+    stages = StageTiming(time) if session is not None else None
+    if session is not None:
+        session.stage_timing = stages
     metadata = run_metadata(data)
     fault = ''
     pose = Attitude(cfg.ATTITUDE_ACCEL_GAIN)
@@ -176,6 +187,8 @@ def run():
     angles = (0, 0, 0)
     construction_complete = True
     stopped = False
+    stop_reason = 'exception'
+    flight_report = None
     in_iteration = False
     try:
         try:
@@ -197,6 +210,10 @@ def run():
         receiver = Receiver(cfg.RECEIVER, cfg.ACTIVE_AXES, cfg.RX_TIMEOUT_MS,
                             max_poll_ms=(cfg.MAX_LOOP_US+999)//1000)
         construction_complete = True
+        if session is not None:
+            construction_complete = False
+            session.start(metadata)  # Alle Objekte/RAM-Reserve vor erster PWM pruefen.
+            construction_complete = True
         print('Version:', cfg.VERSION, '| Modus:', cfg.START_MODE,
               '| Achsen:', cfg.ACTIVE_AXES)
         print('Koerperkonvention: +roll=rechts, +pitch=Nase runter, +yaw=Nase links')
@@ -216,10 +233,15 @@ def run():
             # Erste Differenz ist nur Startvorbereitung, kein ganzer Loopabstand.
             measured_period = None if first_iteration else elapsed_us
             first_iteration = False
+            if stages is not None:
+                stages.begin(start, measured_period)
             dt = max(elapsed_us, 1)/1000000
             timing_failed = elapsed_us < 0 or elapsed_us > cfg.MAX_LOOP_US
             sensor_error = None
-            if imu is not None and not fault and not timing_failed:
+            imu_fresh = False
+            # Beim Datenlogger IMU nach einem verriegelten Automatikfehler weiter
+            # erfassen. Fault bleibt gesetzt; das schaltet keine Stabilisierung frei.
+            if imu is not None and (not fault or session is not None) and not timing_failed:
                 try:
                     sample = imu.read()
                     # Erst NACH dem Read pruefen. Ein spaet zurueckkehrender Bus
@@ -230,11 +252,14 @@ def run():
                             raise ValueError('Messbereich ueberschritten')
                         pose.update(sample, dt)
                         angles = pose.angles()
-                        if abs(angles[1]) > cfg.PITCH_CONTROL_LIMIT_DEG:
+                        imu_fresh = True
+                        if not fault and abs(angles[1]) > cfg.PITCH_CONTROL_LIMIT_DEG:
                             fault = 'PITCH_RANGE'
                 except Exception as error:
                     fault = 'IMU_RUNTIME'
                     sensor_error = error
+            if stages is not None:
+                stages.mark(0)  # IMU inkl. Lageberechnung und Deadlinepruefungen.
             now = time.ticks_ms()
             timing_failed = timing_failed or deadline_missed(start)
             if not timing_failed:
@@ -323,6 +348,8 @@ def run():
             pre_output_us = time.ticks_diff(output_start, start) if outputs is not None else None
             pulses = outputs.write(offsets) if outputs is not None else {}
             write_us = time.ticks_diff(time.ticks_us(), output_start) if outputs is not None else None
+            if stages is not None:
+                stages.mark(1)  # RC/Freigabe/Regler/Ausgabe zusammen.
             # RX-Alter bezieht sich auf den Entscheidungszeitpunkt `now`, nicht
             # auf eine vermeintlich neue Hardware-Capture-Zeit bei der Ausgabe.
             rx_state = rx_snapshot(receiver.channels, cfg.ACTIVE_AXES, now, time.ticks_diff)
@@ -338,7 +365,7 @@ def run():
                 last_mode = mode
             elif transition:
                 print('Fehlerwechsel:', fault or '-', 't=%d ms' % time.ticks_diff(now, started))
-            if time.ticks_diff(now, print_time) >= int(1000/cfg.CONSOLE_HZ):
+            if session is None and time.ticks_diff(now, print_time) >= int(1000/cfg.CONSOLE_HZ):
                 rx = {a: receiver.channels[a]['pulse'] for a in cfg.ACTIVE_AXES}
                 print('roll=%.1f pitch_down=%.1f soll=(%.1f,%.1f) gyro=(%.1f,%.1f,%.1f) yaw_rate_left=%.1f rx=%s servo=%s %s %s' %
                       (roll, pitch, target_roll, target_pitch, sample[3], sample[4], sample[5],
@@ -346,7 +373,7 @@ def run():
                 print_time = now
             # Auch kurze Zustands-/Fault-Wechsel loggen, die zwischen 10-Hz-
             # Samples liegen. Ringgroesse bleibt fest; JSON bewahrt Laufmaxima.
-            if transition or time.ticks_diff(now, log_time) >= int(1000/cfg.LOG_HZ):
+            if log is not None and (transition or time.ticks_diff(now, log_time) >= int(1000/cfg.LOG_HZ)):
                 row = '%d,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d,%d,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%s' % (
                     time.ticks_diff(now, started), mode, roll, pitch, angles[2],
                     target_roll, target_pitch, pulses.get('roll', 0), pulses.get('pitch', 0),
@@ -361,17 +388,41 @@ def run():
                     gate.count, int(gate.armed), int(fresh))
                 log.append(row)
                 log_time = now
+            if stages is not None:
+                stages.mark(2)  # Ereignisdiagnose und eventuelle Konsole.
+            stop_requested = False
+            if session is not None:
+                # Zusatzarbeit NACH der Servoausgabe, vor Work-Zeitmessung.
+                # Ihr Zeitbedarf bleibt in Work/naechster Periode sichtbar.
+                try:
+                    stop_requested = session.step(time.ticks_ms(), {
+                        'mode': mode, 'fault': fault, 'angles': (roll, pitch, angles[2]),
+                        'sample': sample, 'imu_fresh': imu_fresh, 'rx': rx_state,
+                        'pulses': pulses, 'armed': gate.armed, 'fresh': fresh,
+                        'period_us': measured_period, 'iteration_start_us': start})
+                except Exception as error:
+                    session.fail('logger', error)  # Keine neue MANUAL-Ausfallursache.
             # Work umfasst Sensor/Regler/PWM/Konsole/CSV-Formatierung bis hier.
             # Dieser Counter-Update und sleep sind nicht enthalten; der naechste
             # gemessene Startabstand umfasst dagegen die ganze vorige Iteration.
             work_us = time.ticks_diff(time.ticks_us(), start)
             diagnostics.finish(measured_period, pre_output_us, write_us, work_us, timing_failed)
+            if stages is not None:
+                stages.mark(8)  # Rest bis Diagnoseabschluss; sleep folgt danach.
             in_iteration = False
+            if stop_requested:
+                stopped, stop_reason = True, 'ground_button'
+                break
             remaining = cfg.LOOP_US-time.ticks_diff(time.ticks_us(), start)
             if remaining > 0:
                 time.sleep_us(remaining)
     except KeyboardInterrupt:
         stopped = True  # Stopmeldung erst NACH den Abschaltversuchen ausgeben.
+        stop_reason = 'keyboard_interrupt'
+    except Exception as error:
+        if session is not None:
+            metadata['stop_exception'] = type(error).__name__+': '+str(error)[:160]
+        raise
     finally:
         shutdown_ok = construction_complete
         output_error, receiver_error = None, None
@@ -387,6 +438,13 @@ def run():
             except BaseException as error:
                 shutdown_ok = False
                 receiver_error = error
+        session_error = None
+        if session is not None:
+            try:
+                session.close()
+            except BaseException as error:
+                shutdown_ok = False
+                session_error = error
         # Auch eine blockierende/fehlerhafte Konsole darf nicht zwischen den
         # Abschaltversuchen stehen: Diagnose erst nach ALLEN Ressourcen.
         if stopped:
@@ -395,6 +453,8 @@ def run():
             print('PWM-Abschalten fehlgeschlagen:', output_error)
         if receiver_error is not None:
             print('PIO-Abschalten fehlgeschlagen:', receiver_error)
+        if session_error is not None:
+            print('Logger-Ressourcen-Abschalten fehlgeschlagen:', session_error)
         if shutdown_ok:
             print('PWM/PIO ausgeschaltet')
             stats = diagnostics.report()
@@ -408,7 +468,18 @@ def run():
         else:
             # Kein Flashzugriff, wenn die Aktuatorabschaltung unbestaetigt ist.
             print('Abschalten unvollstaendig; kein Logexport. Versorgung trennen.')
-        if shutdown_ok and cfg.SAVE_LOG_ON_STOP and log.count:
+        if session is not None and shutdown_ok:
+            metadata['imu_first_saturation_raw'] = getattr(imu, 'first_saturation', None)
+            metadata['partial_iteration_on_stop'] = in_iteration
+            session.export_context = (metadata, diagnostics, stop_reason)
+            session.can_export = True  # Erst jetzt PWM/Steuer-PIO/Aux-PIO/UART bestaetigt aus.
+            try:
+                flight_report = session.export(*session.export_context)
+            except Exception as error:
+                session.fail('export', error)
+                session.color((session.settings['led_brightness'], 0, 0))
+                print('Export fehlgeschlagen; Versorgung behalten. flight_start.save_pending():', error)
+        if shutdown_ok and cfg.SAVE_LOG_ON_STOP and log is not None and log.count:
             # Keine Flashzugriffe, solange Servos/Regelung laufen.
             stamp = time.ticks_ms()
             path = 'bench_%d.csv' % stamp
@@ -423,3 +494,4 @@ def run():
                 print('Laufbericht gespeichert: bench_%d.json' % stamp)
             except OSError as error:
                 print('Log konnte nicht gespeichert werden:', error)
+    return flight_report

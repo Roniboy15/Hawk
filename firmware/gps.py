@@ -59,13 +59,15 @@ def checked_fields(line):
     if len(line) > 128 or not line.startswith('$') or line.count('*') != 1:
         raise ValueError('Ungueltiger NMEA-Rahmen')
     payload, checksum = line[1:].split('*')
-    if len(checksum) != 2 or any(c not in '0123456789abcdefABCDEF' for c in checksum):
+    if len(checksum) != 2 or any(c not in b'0123456789abcdefABCDEF' for c in checksum.encode()):
         raise ValueError('Ungueltige NMEA-Pruefsumme')
     actual = 0
-    for char in payload:
-        if not 32 <= ord(char) <= 126:
+    # Bytewerte statt einzelner Textzeichen: MicroPython interniert letztere
+    # und kann dabei trotz freiem RAM einen grossen neuen QSTR-Pool brauchen.
+    for byte in payload.encode():
+        if not 32 <= byte <= 126:
             raise ValueError('Nicht-ASCII-NMEA-Daten')
-        actual ^= ord(char)
+        actual ^= byte
     if actual != int(checksum, 16):
         raise ValueError('NMEA-Pruefsumme stimmt nicht')
     fields = payload.split(',')
@@ -152,8 +154,10 @@ class GPS:
 
     def feed(self, data, now_ms):
         """Begrenzter Rahmenpuffer; neue $-Marke synchronisiert nach Stoerung."""
+        # Empfangene Bytes einmal je UART-Block zaehlen, nicht je Byte einen
+        # Methodenaufruf mit Dictionaryzugriff und Saettigungsrechnung ausfuehren.
+        self._count('bytes', len(data))
         for byte in data:
-            self._count('bytes')
             if byte == 36:
                 if self.receiving and self.length:
                     self._count('resyncs')
@@ -223,27 +227,33 @@ class GPS:
             if data:
                 self.feed(data, now_ms)
 
-    def snapshot(self, now_ms):
-        def age(stamp):
-            value = self.diff(now_ms, stamp) if stamp is not None else -1
-            return value if value >= 0 else -1
-        gga_age, rmc_age = age(self.gga_ms), age(self.rmc_ms)
+    def snapshot(self, now_ms, result=None):
+        # Optional denselben Arbeitsspeicher wiederverwenden. Alle Felder auch
+        # bei No-Fix/Stale setzen: keine alten Koordinaten im Dictionary lassen.
+        gga_age = self.diff(now_ms, self.gga_ms) if self.gga_ms is not None else -1
+        rmc_age = self.diff(now_ms, self.rmc_ms) if self.rmc_ms is not None else -1
+        gga_age, rmc_age = max(-1, gga_age), max(-1, rmc_age)
         gga_ok = bool(self.gga and self.gga['valid'] and 0 <= gga_age < self.stale_ms)
         rmc_ok = bool(self.rmc and self.rmc['valid'] and 0 <= rmc_age < self.stale_ms)
         # Position erst aus zwei frischen, gueltigen Saetzen derselben UTC-Epoche.
         paired = bool(gga_ok and rmc_ok and self.gga['utc_ms'] == self.rmc['utc_ms'])
-        result = {'valid': paired, 'gga_valid': gga_ok, 'rmc_valid': rmc_ok,
-                  'gga_age_ms': gga_age, 'rmc_age_ms': rmc_age,
-                  'utc': self.rmc['utc'] if self.rmc else '',
-                  'date': self.rmc['date'] if self.rmc else '',
-                  'lat': self.rmc['lat'] if paired else None,
-                  'lon': self.rmc['lon'] if paired else None,
-                  'quality': self.gga['quality'] if self.gga else 0,
-                  'satellites': self.gga['satellites'] if self.gga else 0,
-                  'hdop': self.gga['hdop'] if gga_ok else None,
-                  'altitude_msl_m': self.gga['altitude_msl_m'] if gga_ok else None,
-                  'speed_ms': self.rmc['speed_ms'] if rmc_ok else None,
-                  'course_deg': self.rmc['course_deg'] if rmc_ok else None}
+        if result is None:
+            result = {}
+        result['valid'] = paired
+        result['gga_valid'] = gga_ok
+        result['rmc_valid'] = rmc_ok
+        result['gga_age_ms'] = gga_age
+        result['rmc_age_ms'] = rmc_age
+        result['utc'] = self.rmc['utc'] if self.rmc else ''
+        result['date'] = self.rmc['date'] if self.rmc else ''
+        result['lat'] = self.rmc['lat'] if paired else None
+        result['lon'] = self.rmc['lon'] if paired else None
+        result['quality'] = self.gga['quality'] if self.gga else 0
+        result['satellites'] = self.gga['satellites'] if self.gga else 0
+        result['hdop'] = self.gga['hdop'] if gga_ok else None
+        result['altitude_msl_m'] = self.gga['altitude_msl_m'] if gga_ok else None
+        result['speed_ms'] = self.rmc['speed_ms'] if rmc_ok else None
+        result['course_deg'] = self.rmc['course_deg'] if rmc_ok else None
         result['course_usable'] = bool(paired and result['speed_ms'] is not None and
                                         result['speed_ms'] >= self.course_min_speed and
                                         result['course_deg'] is not None)

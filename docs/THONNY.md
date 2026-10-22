@@ -1,5 +1,21 @@
 # Thonny: Sicherung, Upload, Kalibrierung und Achsentests
 
+**Neu auf codex/manual-flight-logger:** L3 0.1.4 bestanden. Jetzt Logger 0.1.0
+gemeinsam im SENSOR-Profil pruefen: [FLUGLOGGER_TEST.md](FLUGLOGGER_TEST.md).
+Alle Pythondateien aktualisieren, calibration.json erhalten, Soft-Reboot.
+Danach nur `import flight_start` und `flight_start.run('sensor')`.
+Servo-Versorgungen aus, Empfaenger fuer CH3 separat versorgen, Sensoren normal
+versorgen. Zweimal CH3 oben/unten, dann unten und BOOT 2 s halten. Beide
+Speichermeldungen/Tuerkis abwarten, flight_*.csv/.json nach
+docs/testdaten/fluglogger/F1_sensor/ sichern. Kein neuer L3, keine neue Kalibrierung.
+Der spaetere explizite MANUAL-Test bleibt eigener Schritt. Autostart bleibt aus;
+main.py startet bei AUTO_START=True weiterhin den alten Controller, keinen Logger.
+
+**F1 inzwischen ausgewertet:** Bedienung/Export funktionieren, es gibt aber
+neun >50-ms-Zeitabstaende und TIMING; GPS am Fenster ohne Fix. Vor weiterem
+Test gezielte Timingdiagnose vorbereiten, noch nicht zu F2 wechseln.
+[Befund und Bedeutung der Startmeldung](testdaten/fluglogger/F1_sensor/AUSWERTUNG.md).
+
 **Aktueller Schritt:** [GY-63/BN-180-Sensortests](SENSOREN_TEST.md) auf
 codex/gps-baro-bringup. Dafuer die dort genannten sechs Module hochladen,
 vorhandene calibration.json erhalten, AUTO_START=False. BEC/Receiver/Servos

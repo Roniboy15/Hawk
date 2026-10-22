@@ -1,0 +1,18 @@
+MicroPython v1.29.0 Unix/arm64; math/float enabled; no real machine/ports.
+machine.py stub: Pin = I2C = object. ProbeIMU skips hardware constructor.
+100 x IMU.read + Attitude.update + angles; fake bus; no sensor I/O.
+GC disabled only during each bounded HOST allocation measurement, then enabled.
+Heap numbers are accumulated temporary allocations, not steady live RAM/board latency.
+imu_before attitude_before heap_bytes_100= 742496 pure_host_us_100= 1375
+imu_before attitude_before heap_bytes_100= 742496 pure_host_us_100= 1101
+imu_before attitude_before heap_bytes_100= 742496 pure_host_us_100= 1077
+imu_after attitude_before heap_bytes_100= 572896 pure_host_us_100= 711
+imu_after attitude_before heap_bytes_100= 572896 pure_host_us_100= 719
+imu_after attitude_before heap_bytes_100= 572896 pure_host_us_100= 748
+imu_after attitude_after heap_bytes_100= 508896 pure_host_us_100= 651
+imu_after attitude_after heap_bytes_100= 508896 pure_host_us_100= 689
+imu_after attitude_after heap_bytes_100= 508896 pure_host_us_100= 654
+imu_before.py sha256=925a736d1471769099eb08d7797eaaed93a066bb9a57f1acc4e2d88924310995
+attitude_before.py sha256=d68b717517adeef9f0e6dc0982617e61b3284b987848c89aea65ac1ec16e3ae0
+imu_after.py sha256=408baab076914ff28bb7460d833d9bfaa6b1c64961fec59e666f96d4bcad20ea
+attitude_after.py sha256=577d21a225663d88da4022d5340f8e37215d6c35e924c6a194ee46387dbe5e03

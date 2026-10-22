@@ -70,7 +70,7 @@ class Attitude:
         if not 0 < dt <= MAX_DT_S or any(not math.isfinite(v) for v in sample):
             raise ValueError('Ungueltiger Filter-Zeitschritt/Messwert')
         ax, ay, az, gx, gy, gz = sample
-        gx, gy, gz = [math.radians(v) for v in (gx, gy, gz)]
+        gx, gy, gz = math.radians(gx), math.radians(gy), math.radians(gz)
         w, x, y, z = self.q
         norm = math.sqrt(ax*ax+ay*ay+az*az)
         self.accel_used = False
@@ -89,10 +89,12 @@ class Attitude:
              x+(w*gx+y*gz-z*gy)*h,
              y+(w*gy+z*gx-x*gz)*h,
              z+(w*gz+x*gy-y*gx)*h)
-        length = math.sqrt(sum(v*v for v in q))
+        # Feste vier Komponenten direkt rechnen: gleiche Normierung ohne
+        # Generator-/Listenobjekte in jeder Regeliteration.
+        length = math.sqrt(q[0]*q[0]+q[1]*q[1]+q[2]*q[2]+q[3]*q[3])
         if not math.isfinite(length) or length < 0.1:
             raise ValueError('Quaternion ungueltig')
-        self.q = tuple(v/length for v in q)
+        self.q = (q[0]/length, q[1]/length, q[2]/length, q[3]/length)
 
     def angles(self):
         w, x, y, z = self.q

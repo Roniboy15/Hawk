@@ -11,6 +11,51 @@ except ImportError:
     import json
 
 
+class StageTiming:
+    """Feste SENSOR-Diagnosefelder; keine Dateien/Strings im laufenden Loop."""
+    NAMES = ('imu_pose', 'control_output', 'diagnostics_console', 'entry_boot',
+             'gps', 'barometer', 'ch3', 'record_led', 'loop_tail')
+
+    def __init__(self, clock):
+        self.clock = clock
+        self.current = [0]*len(self.NAMES)
+        self.maximum = [0]*len(self.NAMES)
+        self.worst = [0]*len(self.NAMES)
+        self.iteration = self.worst_iteration = self.worst_period = self.invalid = 0
+        self.stamp = 0
+
+    def begin(self, start, period):
+        # Der JETZT gemessene Abstand gehoert zur VORIGEN Iteration.
+        # Deren Phasen vor dem Zuruecksetzen sichern, nicht die neue Schleife.
+        if period is not None and period > self.worst_period:
+            self.worst_period, self.worst_iteration = period, self.iteration
+            for index in range(len(self.NAMES)):
+                self.worst[index] = self.current[index]
+        for index in range(len(self.NAMES)):
+            self.current[index] = 0
+        self.iteration += 1
+        self.stamp = start
+
+    def mark(self, index):
+        now = self.clock.ticks_us()
+        elapsed = self.clock.ticks_diff(now, self.stamp)
+        self.stamp = now
+        if elapsed < 0:
+            self.invalid += 1
+            return
+        self.current[index] = elapsed
+        self.maximum[index] = max(self.maximum[index], elapsed)
+
+    def report(self):
+        # Erst nach Abschaltung aufrufen. Listen bleiben im Loop gleich gross.
+        return {'names': self.NAMES, 'max_us': self.maximum,
+                'worst_period_us': self.worst_period or None,
+                'preceding_iteration': self.worst_iteration or None,
+                'preceding_stages_us': self.worst,
+                'outside_stages_us': self.worst_period-sum(self.worst),
+                'invalid': self.invalid}
+
+
 class TimingStats:
     def __init__(self, period_us, deadline_us):
         self.period_us, self.deadline_us = period_us, deadline_us

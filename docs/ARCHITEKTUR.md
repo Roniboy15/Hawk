@@ -124,7 +124,8 @@ Pruefanleitung: [FEHLER_TISCHTEST.md](FEHLER_TISCHTEST.md).
 
 Der Branch codex/gps-baro-bringup ergaenzt GPS-NMEA und MS5611 an freien Pins:
 UART0 RX GP13 (TX GP12 unverbunden), I2C1 SDA/SCL GP10/GP11. IMU bleibt auf
-I2C0. Neue Einstellungen stehen in config.py; app.run() nutzt sie noch nicht.
+I2C0. Neue Einstellungen stehen in config.py; app.run() nutzt sie nur mit
+expliziter Fluglogger-Session, nicht im bisherigen Start ohne Session.
 
 gps.py begrenzt Rahmen-/UART-Lesen und prueft GGA/RMC, Pruefsumme und Datenalter.
 Ein gemeinsamer Fix braucht gueltige frische Saetze derselben UTC-Epoche.
@@ -192,6 +193,72 @@ Zustandschaetzung und Aktuatorik belastbar genug sind. Keine leeren Module,
 die Autonomie nur vortaeuschen.
 
 ## Speicherentscheidung
+
+Aktueller Loggerumfang auf codex/manual-flight-logger: CH3 schaltet Aufnahme
+bei unveraendertem MANUAL, kein fester Flugtimer. recording.py ist reine
+Schaltlogik; logger_bench.py stellt explizite CH3-/Flash-Bodenmessungen bereit.
+app.run(session=...) ist optional angebunden, schreibt im laufenden Loop
+weiterhin nicht auf Flash; ohne Session bleibt der bisherige Ablauf erhalten.
+Zielraten/Formatbudget, qualifizierte GPS-Anzeige und Speicherentscheidung
+nach Messung: [Flugloggerplan](FLUGLOGGER_PLAN_UND_BODENTEST.md).
+L2 vom 2026-10-21 zeigt korrekten Readback, aber bis 181.709 ms fuer einen
+Schreibzyklus; aktueller Dateiwriter bleibt aus der Steuerung ausgeschlossen.
+L3 hat den 1-Hz-RAM-Puffer mit Export nach Programmstop am Boden vorgeprueft.
+Encoder/Flugloggerintegration sind jetzt hostgeprueft implementiert, siehe unten.
+Erster L3-Lauf mit 0.1.1: 164880 B Gesamtfreiraum, aber Allokation von 91008 B
+am Stueck scheitert. Ab 0.1.2 verwaltet ram_buffer.RecordBuffer gleich grosse
+Records in kleinen vorab reservierten bytearrays; kein Record ueberquert eine
+Blockgrenze. Standardprobe: 632 * 144 B in 40 Bloecken, maximal 2304 B je Block.
+slot(index) liefert Block/Offset fuer pack_into, ungueltige Indizes werden
+abgewiesen. Keine Aufnahmeverwaltung, kein Ueberschreiben/Verkleinern. Die Probe
+misst nach Inhaltspruefung/GC die verbleibende 64-KiB-Reserve inklusive
+Objekt-/Listenoverhead; Erfolg ist weiterhin nur vorlaeufig. Auch die Blockvariante
+scheitert im Besitzerlauf bei 162608 B Gesamtfreiraum, ohne gespeicherten genauen
+Fehlerort. 0.1.3 instrumentiert deshalb den Allokator: echte Erfolgszaehler,
+letzte Anforderung, freier Heap beim Fehler vor Cleanup, Fehlermeldung und
+Heapzusammenfassung/Traceback in der Konsole. Die Nutzdatengroesse bleibt gleich.
+Resultat 0.1.3: 35 Bloecke/80640 B erfolgreich, Block 36 scheitert mit
+2304-B-MemoryError bei 79552 B freiem Heap. Fragmentierung ist stark indiziert;
+die genaue Heapkarte fehlt. 0.1.4 reserviert alle Recordbloecke vor den grossen
+Modulimports und haelt sie waehrend derselben Imports. Erst danach Inhaltsprobe
+und Reservepruefung; auch Compilerfehler werden gemeldet und der Puffer freigegeben.
+Besitzerlauf 0.1.4 hat bestanden: 40 Bloecke, Inhalt/Imports bestaetigt, 68656 B
+frei. Die fruehe Allokation ist fuer diese Vorprobe physisch bestaetigt.
+[L3-Befund](testdaten/logger_boden/AUSWERTUNG_L3.md).
+
+Neue explizite Integration (Logger 0.1.0): flight_start reserviert den vollen
+Puffer vor Imports und waehlt sensor/manual nur im RAM; kein Autostart.
+flight_records kodiert 144 B pro Ganzdatensatz. flight_logger kapselt CH3
+auf eigenem PIO-Index, GPS-/Barometerpolling, GPS-Bereitschaft, NeoPixel und
+debouncten BOOT-Stop. Die drei Steuerkanaele behalten ihre Frische-/Neutraldomaene.
+app.run(session=None) bleibt der bisherige Pfad; mit Session Zusatzarbeit nach
+Servoausgabe, vor Workmessung. Zeitueberschreitungen werden weiter erkannt.
+Bei verriegeltem Automatikfehler wird nur in der Logger-Session weiter IMU
+gelesen; Fault bleibt gesetzt und ungueltige alte Winkel werden nicht neu datiert.
+
+Logger 0.1.6 nutzt vorhandene StageTiming-Felder fuer SENSOR und MANUAL.
+Die langsamste Periode bewahrt die Phasen der vorausgehenden Iteration;
+Auswertung/Export erfolgen nach Stop. Feste Arrays entstehen vor der
+Startup-Reservepruefung, Messkosten bleiben im Loop sichtbar. Das lokalisiert
+den F2-TIMING-Aussetzer, aendert aber weder Schutz-/Neutralfreigabe noch Latenz.
+
+0.1.7 entpackt IMU-Register mit struct.unpack_from und rechnet feste Komponenten
+ohne Generatoren; Filtergleichungen, Koordinaten und Grenzen bleiben erhalten.
+IMU haelt genau einen first_saturation-Rohsatz (ax,ay,az,T,gx,gy,gz), kein Ring.
+app uebernimmt ihn nach Abschaltung als imu_first_saturation_raw ins JSON.
+
+0.1.8 verkuerzt ausschliesslich gc_poll_ms200 ->20. Der freie Heap kann
+zwischen200-ms-Abfragen bereits erschoepft sein; dann sammelt automatische GC
+in einer beliebigen Phase. Budgetgepruefte geplante GC bleibt am Loopende,
+automatische GC aktiv. Haeufigere Heapscans kosten selbst Zeit und garantieren
+keine Deadline; alle Kosten und bisherigen Fehlerreaktionen bleiben sichtbar.
+
+Kein paralleler Text-Ring bei Flugsession. Bei vollem RAM/Loggerfehler stoppt
+nur Aufnahme. Nach bestaetigtem PWM-/Steuer-PIO-/Aux-PIO-/UART-Stop folgen CSV/JSON.
+Bei Exportfehler bleibt der Puffer in flight_start._pending referenziert;
+save_pending ist ohne bestaetigten Stop gesperrt und nutzt neue Dateinummern.
+Reale Startup-Reserve, BOOT-/LED-Kosten und Gesamtloop werden in F1/F2 geprueft:
+[Testanleitung](FLUGLOGGER_TEST.md). Kein eigentlicher Bord-Autostart eingerichtet.
 
 Code und Kalibrierdatei bleiben im Board-Flash (2 MB insgesamt, Firmware
 benoetigt einen Teil). RAM ist 264 KB inklusive MicroPython. Ein fester

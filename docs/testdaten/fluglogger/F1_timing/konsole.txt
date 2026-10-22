@@ -1,0 +1,28 @@
+>>> import flight_start
+flight_start.run('sensor')
+Sensor-ID: 0x72 nur Bodenversuch
+Phase GYRO_CAL t=174511 ms: noch kein PWM-Start
+Sensor 6 Sekunden unbewegt halten
+Mittel: [-0.21616304, 0.02596907, 0.9794962, -2.833665, -5.5021564, -0.2166411] Streuung: [0.001569209, 0.0014178363, 0.0014850495, 0.070711484, 0.04798093, 0.04803494]
+Phase GYRO_DONE t=182044 ms
+Fluglogger 0.1.1 : 1 Hz, CH3 unten/oben Pause/Aufnahme.
+Nach Landung CH3 unten, BOOT 2 s halten; erst nach Speichermeldung ausschalten.
+RAM nach echten Objekten frei: 67920
+Version: 0.2.3-bench | Modus: sensor | Achsen: ('roll', 'pitch', 'yaw')
+Koerperkonvention: +roll=rechts, +pitch=Nase runter, +yaw=Nase links
+Richtungen bestaetigt: ('roll', 'pitch', 'yaw')
+Neutral wird nur vor Aktivierung/nach RX-Ausfall verlangt.
+Ohne Lagekalibrierung: Winkel relativ zum Sensorkoordinatensystem.
+Zustand: SENSOR Fehler: - t=7 ms
+Fehlerwechsel: TIMING t=1154 ms
+Test gestoppt
+PWM/PIO ausgeschaltet
+Timing: Iterationen=3831 TIMING-Erkennungen=17
+  period: max_us=53689 ueber_Sollperiode=3830 ueber_Deadline=17 ungueltig=0
+  pre_output: max_us=None ueber_Sollperiode=0 ueber_Deadline=0 ungueltig=0
+  write: max_us=None ueber_Sollperiode=0 ueber_Deadline=0 ungueltig=0
+  work: max_us=53046 ueber_Sollperiode=3816 ueber_Deadline=11 ungueltig=0
+Flugdaten gespeichert: flight_242233_0.csv
+Flugbericht gespeichert: flight_242233_0.json - jetzt Versorgung abschalten.
+
+>>>

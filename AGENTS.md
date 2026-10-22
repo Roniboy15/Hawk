@@ -3,8 +3,8 @@
 ## Scope and current setup
 
 This is RP2040 MicroPython firmware for glider ground experiments. There is
-no established flight release. Current work is GPS/barometer bring-up, followed
-by manual data collection and a reassessment using measured results.
+no established flight release. Current work is MANUAL flight-logger preparation
+on codex/manual-flight-logger, followed by measured data collection/reassessment.
 
 Owner-reported setup (2026-10-11):
 
@@ -161,6 +161,257 @@ branch directly from that commit, not old main. No push or merge is requested.
 docs/EINBAU_UND_MANUAL_DATENFLUG.md specifies wiring, power,
 mounting and the proposed five-minute/1-Hz logger with continued MANUAL on log
 capacity exhaustion and a ground-only stop/export before power removal.
+
+Owner decision (2026-10-20), superseding that five-minute/1-Hz proposal: no fixed
+flight timer. Free former throttle channel is CH3, a separate PWM output;
+physical low selects MANUAL without recording, high selects MANUAL plus recording.
+Pulse endpoints/polarity and receiver model are still unknown. Middle retains
+state; debounce and low-before-high startup prevent accidental starts. Loss of
+this auxiliary channel must not invalidate the three flight-control axes or
+stop PWM. Repeated on/off creates segments; buffer-full/error stops logging only.
+Use existing hardware first and measure onboard flash on the ground. Owner's
+>1-MB-free figure is capacity, not timing qualification. RP2 v1.29 flash operations
+disable interrupts/XIP and can stall RC updates; no flight flash backend is enabled.
+recording.py implements the pure switch, including reverse pulse polarity;
+logger_bench.py provides explicit run_channel/run_storage, no app/PWM, no import
+side effects. CH3 test uses proposed free GP14 with servo power disconnected;
+receiver needs its own BEC supply and shared GND, MCU uses USB without tied 5 V.
+Storage test uses USB only/BEC off, three new 64-KiB pattern files and 128-KiB
+space reserve; measures write/flush/sync/close, verifies readback, never deletes
+old files or touches calibration. It is not the flight logger or a timing proof.
+146 host tests pass; neither new hardware test has been executed by the agent.
+Owner subsequently selected about ten minutes of total recording per flight as
+a storage sizing target, still no stop timer. Proposed compact multirate package:
+25-Hz gyro/RX/servo (50 Hz if measured budgets allow), 10-Hz attitude/acceleration
+and barometer, 1-Hz GPS/status. Estimated 32/24/32/64/32-byte records are not yet
+implemented/verified; count metadata/filesystem overhead before promising duration.
+See docs/FLUGLOGGER_PLAN_UND_BODENTEST.md for capacity estimates and L1/L2 instructions.
+BN-180 TX LED means serial output, PPS means receiver 3D fix; neither proves
+the MCU parsed fresh positions. Software readiness LED is planned, not implemented.
+
+Owner/result update (2026-10-21): L1/L2 archived in docs/testdaten/logger_boden/.
+L1: 1300 fresh frames, 998..1998 us, last 998, clean shutdown. Owner confirms
+first and last stick state were bottom, establishing bottom=998/top=1998.
+RECORDING_CHANNEL now prepares pin14/1200-off/1800-on/200ms/sign+1, unused by app.
+L2: all three 64-KiB pattern files verified, no reported errors, but write max
+72.098 ms, flush max 114.338 ms, cycle max 181.709 ms; 109/208 reported cycles
+over deadline. v0.1.0 did not store the threshold; current MAX_LOOP_US is 50 ms.
+Free flash before patterns 1265664 B, after 1056768 B; capacity is not the problem.
+Do not put this blocking filesystem writer in the MANUAL loop, hide time from
+fault detection, or raise thresholds merely to accept it. No servo timing was
+measured in this separate test. See AUSWERTUNG_L1_L2.md; preserve raw JSON.
+Owner asks whether less frequent saving helps. Explain frequency versus maximum
+stall separately. Proposed existing-hardware alternative: ~1-Hz full snapshots
+in RAM and export after ground shutdown; GPS/slow flight-data useful, fast
+gain analysis limited. This is a proposal, not consent to silently change final
+flight-data quality. No in-air export on CH3-low; power loss loses unsaved RAM.
+logger_bench 0.1.1 adds run_ram(): imports modules only, tests 144 B*(600+32)=91008 B
+buffer plus 64 KiB reserve, releases it before JSON. L3 is preliminary: no actual
+controller objects or final encoder, no hardware qualification. Ten minutes is
+memory-sizing target, never a flight stop timer. No independent bypass gate added.
+
+Owner/result update (2026-10-21), L3 0.1.1: allocation_failed for a single
+91008-B bytearray, despite 164880 B total free and a 65536-B reserve target.
+estimated_capacity_samples=689 is arithmetic, not successful allocation.
+Fragmentation/split heap is consistent but not measured. Preserve original
+logger_ram_357044_0.json and see docs/testdaten/logger_boden/AUSWERTUNG_L3.md.
+Bench 0.1.2 now uses ram_buffer.RecordBuffer: 632 budgeted 144-B records in
+39*2304-B blocks plus 1152 B, same payload/reserve, no silent rate/capacity cuts.
+Whole records stay within blocks; slot indices do not wrap. Partial allocation
+and interrupt release blocks; JSON follows release/GC. Content probe then GC
+precedes actual remaining-RAM measurement, including list/object overhead.
+156 host tests pass. New block variant still needs only L3 repeated by owner;
+L1/L2 need no blanket repeat. Final encoder/controller objects are still absent,
+so even fits_preliminary is not a complete application or timing qualification.
+
+Later L3 result (0.1.2): allocation_failed/phase allocate despite 162608 B free;
+raw logger_ram_1246428_0.json copied unchanged to L3_bloecke/. Planned block_count
+40 and max_block_bytes 2304 do NOT report actual progress. No exact failing
+block/error message is available, so do not assert proven fragmentation or that
+even the first 2304-B allocation failed. Bench 0.1.3 instruments allocation:
+actual successful blocks/bytes, last request, free RAM at allocator failure
+before partial-buffer cleanup, error text/location; mem_info/traceback printed
+to console. Same payload/block size/reserve, no quiet capacity/rate reduction.
+158 host tests pass; next is one targeted L3 diagnosis, archive JSON AND console
+under L3_diagnose/. No repeated L1/L2 or blind smaller-block iterations required.
+
+Later L3 result (0.1.3): 35 blocks / 80640 B actually allocated, 36th 2304-B
+allocation fails with 79552 B still free. failure_location=block_allocator;
+raw logger_ram_2167178_0.json preserved under L3_diagnose/. Strong fragmentation
+evidence, exact heap map unavailable (console not provided). 0.1.4 allocates
+the whole same buffer BEFORE importing the same app/gps/ms5611/sensor_test/
+recording modules, then verifies content and actual >=65536-B reserve after GC.
+Compiler/import failure is a separate status and releases buffer before JSON.
+free_before_bytes now precedes heavy imports, not comparable with 0.1.3; only
+the final free_after_allocation_bytes qualifies reserve. Preloaded module list
+is reported; next owner run needs soft reboot and only logger_bench imported.
+161 host tests pass. New ordering is not yet board-tested; archive next JSON/
+console in L3_frueh/. Future flight entry must preserve early buffer allocation
+before app import if this works. No smaller capacity, no flight code enabled.
+
+L3 closure (0.1.4): logger_ram_36572_0.json archived unchanged in L3_frueh/.
+All 40 blocks / 91008 B allocated, content verified, no preloaded runtime
+modules, all imports completed, 68656 B free (3120 above 64-KiB reserve).
+Vorprobe passed; no further isolated L3. Does not qualify real runtime objects.
+Owner explicitly chooses 1 Hz for first MANUAL data flights and accessible BOOT.
+New logger 0.1.0: flight_start allocates before imports; explicit sensor/manual
+profiles only, AUTO_START=False/main unchanged. app optional session after
+servo write, included in work/period timing. Separate CH3 Receiver PIO offset,
+no auxiliary freshness in control neutral gate. 144-B records/632 slots,
+whole segments, full stops logging only, no flash in loop. BOOT released first,
+hold 2 s while capture paused for ground shutdown/export. GPS/NeoPixel readiness;
+no ready indication from repeated same epoch. Invalid IMU is missing, not frozen
+fresh data; reading after latched automation fault never clears that fault.
+Export only after PWM/control-PIO/aux-PIO/UART close, pending data retained on
+failure and retry guarded by confirmed shutdown. 183 host tests pass.
+Next physical step F1 sensor (servos unpowered), then F2 manual, see
+docs/FLUGLOGGER_TEST.md. No isolated L1-L3 repeats, no autonomous function,
+no standalone logger boot profile or flight qualification yet. Do not assume
+the extra 3120 B is all remaining RAM, nor that encoder/objects are already
+physically qualified by the older L3 import probe.
+
+F1 result (2026-10-21): flight_327002_0 CSV/JSON archived unchanged under
+docs/testdaten/fluglogger/F1_sensor/. Owner tested indoors/at a window. Two
+segments, 35 samples + four events, clean ground_button/shutdown_ok, no PWM,
+69616 B free after startup objects. No component errors; nevertheless TIMING
+latched at 7812 ms, nine periods >50 ms (max 50940 us), work max 50337 us.
+Do not read errors={} or the SENSOR mode label as absence/presence of a
+sensor fault: first state has empty fault, later TIMING persists. GPS serial
+works (920 valid sentences, no parse/checksum/poll gaps) but no fix in this run;
+indoor reception is a plausible cause, not a proven device defect. F1 operation/
+export passed, integrated timing and outdoor readiness remain open, F2 not run.
+Timing trips invalidate control RX and reapply the neutral gate even in MANUAL;
+with nonneutral sticks interruption can outlast the single 51-ms interval.
+This concrete issue warrants targeted stage timing before F2, without imposing
+exactly 100 Hz or revisiting accepted bypass risk. Cause (including possible GC)
+is unproven; no per-stage telemetry yet. Do not raise deadline, disable gate,
+blindly optimize or repeat L3. Current review changes evidence/docs only.
+Next prepare bounded stage timing, then one F1 diagnostic run outdoors with
+servos unpowered; preserve JSON/CSV and console in a separate folder. See
+docs/testdaten/fluglogger/F1_sensor/AUSWERTUNG.md.
+
+Subsequent 0.1.1 implements that bounded stage timing only for logger SENSOR:
+three fixed nine-element arrays, created before the RAM-reserve check; no
+per-iteration files/console added. Previous iteration's phases are paired
+with the next measured period, including its uninstrumented tail/sleep.
+stage_timing exported in JSON after shutdown; normal timing/fault gates remain.
+186 host tests pass, including slow-phase attribution/wrap and real-app TIMING.
+Next owner action is F1_timing outdoors, not further implementation first:
+upload app/diagnostics/flight_logger/config, preserve calibration, soft reboot,
+run flight_start.run('sensor'), two captures/pause, BOOT, save both files AND
+console. See docs/FLUGLOGGER_TEST.md. MANUAL profile has no active stage probe.
+
+F1_timing 0.1.1 completed indoors: 60.162 s, two segments, ground_button/export
+clean, 17 timing trips, max period 53689 us. Worst preceding phases: IMU 30130,
+GPS 16347 us; similar ~25-ms maxima in unrelated stages suggest GC but do not
+prove it. Baro jumps +174 Pa / -15.35 m at 18.493 s; owner denies touching/
+covering/changes, confirms VCC/PS=3V3 and GND/CSB=GND. Cause open, no filter fix.
+0.1.2 reuses GPS scratch snapshot (cache coherent pairs separately), removes
+per-snapshot helper closure, batches byte counter per received block. 187 host
+tests pass; no deadline/gate/GC-mode changes, no measured timing improvement yet.
+Next: upload gps/flight_logger/config only from prior 0.1.1, soft reboot, indoor
+60-90-s SENSOR comparison, one segment, BOOT; archive F1_vergleich_012 plus
+console. Outdoor GPS load remains later; do not require computer outdoors for
+this comparison. See docs/testdaten/fluglogger/F1_timing/AUSWERTUNG.md.
+
+0.1.2 comparison archived in F1_vergleich_012: owner moved all axes, then rested.
+90.734 s, seven trips/max51355 us, mean66.24 Hz; startup_gc_us=23898. Baro
+95763..95770 Pa / -0.243..0.375 m, old 15-m jump not repeated or explained.
+0.1.3 schedules GC after output/LED when free heap <32768 B and work <=15 ms,
+further limited by measured startup GC +5-ms margin against the SAME deadline.
+Busy loops defer it; automatic GC stays enabled, all cost stays in Work/Period,
+loop_tail and new JSON runtime_gc. Start reserve/payload unchanged. 189 host
+tests pass, including actual GC-method call with simulated 60-ms delay through
+app proving TIMING/neutralization. Hardware effect unproven. Next owner action:
+upload flight_logger/config only, soft reboot, indoor SENSOR 60-90 s, one
+segment/BOOT, save F1_gc_013 plus console. No new calibration/L3; F2 still pending.
+
+0.1.3 failed: Downloads flight_265737_0 copied unchanged into F1_gc_013/.
+Orange=GPS MemoryError allocating640, full=false, no segments/CSV rows;
+Ctrl+C/shutdown_ok. runtime_gc count0/deferred1566/min_free384. GC starvation
+policy bug: per-loop heap scan precedes 15-ms eligibility. 0.1.4 checks time
+first, heap query every200 ms, pending GC retries without another scan,
+checks actual remaining deadline budget after scan. Automatic GC unchanged,
+isenabled now reported. Three new realistic scan-delay tests failed before,
+pass after; 192 total. Preserve 64-KiB startup reserve; no inferred hardware
+fault/disabled-auto-GC from missing old telemetry. Next upload flight_logger/
+config only, soft reboot, SENSOR indoors; archive F1_gc_014 +console. Abort
+cleanly on orange and preserve report; do not repeat 0.1.3 unchanged. No F2 yet.
+
+0.1.4 follow-up: flight_68106_0 and flight_62671_0 still fail GPS with
+MemoryError allocating640 despite active GC; latest has CH3 capture and no
+timing trips over only 18.570 s with GPS disabled early. Preserve raw reports
+in F1_gc_014. MicroPython 1.29.0/Unix reproduces the exact error in checked_fields:
+text iteration interns characters and expands a QSTR pool on fragmented heap.
+0.1.5 uses byte iteration for checksum/ASCII checks; same reproduction passes
+without new interned strings. The reported 640 is the pool entry count passed
+to m_malloc_fail, not its actual byte allocation. 193 CPython tests pass.
+Board failure line is not captured; reproduction strongly explains the symptom,
+but board GPS/timing validation remains pending. No more GC-policy changes here.
+
+0.1.5 board follow-up, flight_344020_0: 137.227 s, no component/fault/timing
+errors, 1096 checksum-valid GPS sentences/274 updates with no fix, 105 samples
+plus start/stop, clean BOOT export. Worst period49.500 ms leaves only0.500 ms
+to deadline; no flight timing guarantee. Targeted indoor SENSOR check passed;
+next F2 MANUAL ground check, then valid-fix/readiness and intended-duration
+checks plus standalone power/start. No firmware change needed for F2.
+
+F2 0.1.5, flight_322120_0: two segments/145 samples, clean export, but control
+continuity FAILED. At152784 ms a51.021-ms period triggers TIMING, deliberately
+invalidates ALL RC channels and neutralizes all three outputs. Fresh frames
+return27 ms later; WAIT_NEUTRAL lasts until157913 ms (5.129-s interruption).
+No logged evidence of a particular lost radio channel. Owner also reports
+stepped/lagging MANUAL motion, explicitly also with CH3 paused; sensor/attitude
+work and GC continue then, so do not attribute it solely to record packing.
+Mean loop16.275 ms, PWM50 Hz, GC max24.660 ms;
+these support jitter as a hypothesis, not measured end-to-end latency. All
+logged MANUAL outputs exactly match configured mapping; no smoothing present.
+0.1.6 reuses existing StageTiming for MANUAL too (was SENSOR only), with fixed
+fields before unchanged reserve check. It is diagnosis, not a performance fix;
+guard/rearm/deadline/gains/pins/capacity unchanged. Existing real-app60-ms-GC
+regression now also asserts phase attribution; failed before, passes after.
+193 host tests pass. Next: upload app/config only, short MANUAL timing table
+run, archive F2_timing_016. Do not repeat F2 0.1.5 or claim flight qualification.
+
+F2 timing0.1.6, flight_385195_0 (2026-10-22): 283.299 s, 218 samples/224 rows,
+one timing trip53.154 ms. Worst preceding phase IMU/pose30.284 ms, GPS8.964 ms,
+loop_tail1.049 ms: scheduled GC in tail did not cause that worst phase;
+automatic GC is plausible but not measured there. At187877 ms IMU_RUNTIME
+reports saturation; owner confirms Hawk still, only servos moved. No raw
+saturated axis saved, so do not infer fast hand movement or electrical cause.
+At191824 ms timing invalidates all RC despite fault label still IMU_RUNTIME;
+fresh frames25 ms later, MANUAL192397 ms (573-ms interruption). GPS/exports OK.
+0.1.7 reduces allocation in IMU.read/Attitude.update, preserves math/mapping,
+range thresholds and guards; caches one first_saturation raw tuple and exports
+imu_first_saturation_raw only after shutdown. 196 host tests pass, including
+signed boundaries/retention, mixed-axis rotation and MANUAL continuing after
+IMU saturation with raw metadata. MicroPython/Unix100-step probe uses31.46%
+less temporary heap, not a board timing proof; GC disabled ONLY in host probe.
+Next: upload imu/attitude/app/config, soft reboot, MANUAL table comparison
+4-5 min (stop on fault), archive F2_vergleich_017. No new calibration/GPS walk.
+
+F2 comparison0.1.7, flight_231333_0: two TIMING trips at19.161/127.166 s,
+max51.156 ms; fresh RC after20/19 ms, MANUAL after541/2981 ms. No saturation
+this run, GPS/export OK. Raw files/report in F2_vergleich_017/. 0.1.8 changes
+only gc_poll_ms200->20 and version: 200-ms checks can miss heap exhaustion
+between checks. MicroPython/Unix actual IMU/pose probe:71->0 unplanned heap
+increases under simulated scheduling; not board timing proof. New regression
+fails old interval/passes new;197 suite tests pass. Guards/GC mode/reserve and
+sample capacity unchanged. Owner reports gc.threshold()=-1 after reopening
+console; previous-run value unknown. Next: config.py only, soft reboot, short
+MANUAL comparison F2_gc_018; no calibration or hardware action by agent.
+
+F2 0.1.8 result, flight_813555_0 (2026-10-22):288.274 s, one segment,
+273 samples/275 rows retained; clean BOOT export. No timing/fault/reacquisition
+after initial neutral enable; max period45.709 ms, mean19.638 ms (50.92 Hz).
+1770 planned GCs/max24.656 ms; minimum queried free heap3328 B, not a leak
+proof or continuous reserve.825 recorded MANUAL axis mappings exactly match
+source functions. IMU/baro valid, no saturation; GPS2304 valid sentences but
+no fix. Targeted F2 continuity/export passed, physical latency/full-fix/10-min
+and standalone supply/start still open. No new firmware needed for this result.
+See F2_gc_018/AUSWERTUNG.md. Next secure this stand, plan MCU supply/intentional
+logger boot without Mac, then combined GPS-ready/10-min two-segment ground run.
+Do not imply AUTO_START=True already starts the flight logger.
 
 ## Working boundaries
 

@@ -1,8 +1,68 @@
 # Validierung — v0.2.3-bench
 
-Letzter Hostlauf am 2026-10-20: 131 automatische Tests bestanden, CPython 3.9.6
-(94 bestehende Steuerungstests und 35 Sensortests).
-Alle 18 Firmwaredateien und der Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
+Letzter Hostlauf am 2026-10-22: 197 automatische Tests bestanden, CPython 3.9.6
+(106 Steuerungs-, 37 Sensor-, 30 Logger-/Puffer- und 24 Flugloggertests).
+
+Physischer F2-0.1.8-Vergleich jetzt bestanden:288.274 s ohne Timing-/Fault-
+oder erneute RX-Sperre nach Aktivierung. Max45.709 ms,273 Samples/275 Zeilen
+vollstaendig,825 MANUAL-Achsenwerte exakt; sauberer Export. GPS empfaengt ohne
+Fehler, hat aber keinen Fix.1770 geplante GCs, min abgefragter Heap3328 B;
+kein Nachweis fuer jede Last/lange Laufzeit. Nur Nachweis/Dokumentation geaendert,
+keine neue Firmware/Hosttests in dieser Auswertung.
+[0.1.8-Bodenbefund](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md).
+
+F2 0.1.7 hatte erneut zwei Trips (max51.156 ms), mit541/2981 ms Unterbrechung.
+0.1.8 aendert nur das Heap-Abfrageintervall200 ->20 ms. Neue Heapdruck-
+Regression scheitert mit alter Einstellung, besteht mit neuer; separate echte
+MicroPython/Unix-Probe zeigt71 ->0 ungeplante Heap-Anstiege. Modellierte Zeiten,
+keine Boardgarantie. [Befund/Probe](testdaten/fluglogger/F2_vergleich_017/AUSWERTUNG.md).
+Der einzelne test_flight_logger-Lauf braucht aktuell Hardware-Stubs aus der
+Gesamtsuite (sonst zwei Importfehler); der oben genannte Gesamtlauf besteht.
+
+0.1.7 entlastet IMU.read/Attitude.update durch direktes Entpacken/feste
+Komponenten statt kurzlebiger Listen/Generatoren. Gleiches Vorzeichen-/Bias- und
+Normierungsverhalten, unveraenderte Range-/Zeitgrenzen. Drei neue Tests pruefen
+analytische Mehrachsenrotation, alle zwoelf vorzeichenbehafteten Rangegrenzen
+mit erstem Rohsatz/nachfolgender Erholung sowie Export bei weiterlaufendem MANUAL.
+Die alte read-Methode scheitert an allen zwoelf Rohsatz-Pruefungen, die neue
+besteht. Host-MicroPython-Probe:31.46% weniger temporaerer Heap im IMU/Lagepfad;
+keine Messung von Bus/Boardlaufzeit. Firmware-AST geprueft.
+[0.1.6-Befund/0.1.7-Vergleich](testdaten/fluglogger/F2_timing_016/AUSWERTUNG.md).
+
+F2 0.1.5 zeigt einen echten 5.129-s-Steueraussetzer nach einer 51.021-ms-
+Periode: TIMING -> globales RC-Verwerfen/Neutral -> erneute Neutralfreigabe.
+Frische RC-Pulse waren nach 27 ms wieder da. Ursache des langen Abschnitts
+unbekannt; stage_timing war im MANUAL-Bericht null. 0.1.6 aktiviert vorhandene
+Phasenfelder auch fuer MANUAL. Der bestehende 60-ms-GC-Integrationstest prueft
+nun zusaetzlich diese Phasenzuordnung, scheiterte vorher und besteht danach.
+193 Tests bestehen erneut; das behebt den Aussetzer noch nicht.
+[F2-Befund](testdaten/fluglogger/F2_manual_015/AUSWERTUNG.md).
+
+0.1.5 prueft NMEA-Pruefsummen mit Bytewerten statt internierten Textzeichen.
+Auf MicroPython 1.29.0/Unix scheitert die alte Funktion bei fragmentiertem Heap
+mit exakt dem gemeldeten 640-Fehler; die neue besteht denselben Versuch.
+Zusaetzlicher Hosttest sichert ASCII-/Hex-Pruefung. Neuer Boardlauf 0.1.5:
+137.227 s ohne GPS-/Komponentenfehler oder Timing-Trip, 1096 GPS-Saetze,
+105 Samples und sauberer BOOT-Export. Gezielt getesteter SENSOR-Fall bestanden;
+kein Positionsfix, F2 MANUAL und laengerer Lauf noch offen. Maximal 49.500 ms
+laesst nur 0.500 ms zur Deadline, keine garantierte Laufzeitreserve.
+[Boardbefund](testdaten/fluglogger/F1_gps_015/AUSWERTUNG.md).
+[Rohdaten und Reproduktion](testdaten/fluglogger/F1_gc_014/AUSWERTUNG.md).
+
+0.1.4 korrigiert den physisch gemeldeten 0.1.3-GC-Aufschub; der GPS-Fehler blieb.
+Drei zusaetzliche Regressionen simulieren langsame Heap-Abfrage, begrenzte
+Abfragefrequenz und Wiederaufnahme einer faelligen GC ohne erneuten Scan.
+Alle drei scheiterten vor der Korrektur. Die vorigen Tests hatten mem_free
+ohne Laufzeit modelliert und konnten diesen Fehler deshalb nicht erkennen.
+Reale Boardwirkung und Ursache jedes Speicherengpasses bleiben zu pruefen.
+
+0.1.3: zwei neue Tests fuer geplante GC nur bei niedrigem freien Heap und
+kurzer bisheriger Arbeit, Aufschub bei hoher Arbeit, kein Flash im Loop.
+Bestehende App-Integration injiziert jetzt echte _collect_if_due()-Aufrufe mit
+60-ms-Stub-GC: TIMING/Neutralstellung bleiben wirksam. Export sichert runtime_gc.
+Physischer 0.1.2-Lauf bleibt mit sieben >50-ms-Perioden offen; kein Hosttest
+belegt die Wirkung der neuen Planung auf dem Board.
+Firmwaredateien und Hostauswerter werden zusaetzlich per AST im RAM auf Python-Syntax
 geprueft. Dies bestaetigt keine MicroPython-/PIO-Kompilation oder Board-Laufzeit.
 
 ```sh
@@ -10,6 +70,22 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
 ```
 
 ## Geprueft
+
+Neu eingegangener kombinierter Loggerlauf: [F1 SENSOR](testdaten/fluglogger/F1_sensor/AUSWERTUNG.md).
+CH3/BOOT/RAM-Export bestaetigt, keine PWM, aber TIMING ab 7.812 s mit neun
+Schleifenabstaenden >50 ms. Kein IMU-/Barometerfehler; GPS am Fenster ohne Fix.
+F1 daher teilweise bestanden; gemeinsame Zeitreserve, Freiluftbereitschaft
+und F2 MANUAL offen. Rohdateien, Schema/Sequenzen, Zeilenzahlen, Gueltigkeitsbits
+und Abschluss separat auf Konsistenz geprueft. Bei dieser Auswertung keine
+Firmwareaenderung und kein neuer Hardware-/Hostregressionslauf.
+
+Nachfolgend Logger 0.1.1: feste Phasenfelder nur im gemeinsamen SENSOR-Profil,
+vor der bestehenden RAM-Reservepruefung angelegt. Vorige Phasen werden der
+naechsten gemessenen Periode zugeordnet; Export erst nach Abschaltung.
+Drei neue Tests pruefen Tick-Umlauf/Zuordnung/feste Listen, getrennte lange
+GPS-/Barokosten bei pausierter Aufnahme und weiter wirksamen TIMING-Fault
+in der echten App. Bestehender Exporttest prueft neue JSON-Felder. Kein
+gewaehlter Grenzwert/Gain geaendert; keine Board-Messung durch den Agenten.
 
 - RC-Mitte/Endpunkte inklusive asymmetrischer Wege und stetiger Totzone.
 - Freigabe nur bei neuen Frames; Trimmen nach Freigabe bleibt aktiv.
@@ -247,6 +323,106 @@ Levelmetadaten und Erhaltung der RC-Daten bei neuer Levelkalibrierung.
 bleiben unveraendert, bis die IMU tatsaechlich umgebaut wird. Hosttests ersetzen
 keine SENSOR-/MANUAL-/Stabilisierungspruefung nach dem mechanischen Umbau.
 [Einbauplan](EINBAU_UND_MANUAL_DATENFLUG.md).
+
+## MANUAL-Logger-Vorbereitung: CH3 und Flash, 2026-10-20
+
+15 neue Hosttests, insgesamt 146 bestanden. RecordingSwitch prueft
+low-before-high, 200-ms-Bestaetigung/Zwischenstellung, invertierte Pulspolung,
+Tick-Wrap, ungueltige Werte und erneute Freigabe nach Kanalverlust.
+Es gibt noch keine Kopplung an app oder Servoausgabe.
+
+logger_bench misst bei explizitem Bodenaufruf CH3 an freiem GP14 oder erzeugt
+begrenzte neue Flash-Testdateien. Hosttests injizieren lange write/flush/sync/
+close-Zeiten und pruefen, dass alle Phasen/komplette Schreibzyklen sichtbar
+sind. Weitere Faelle: zu wenig Platz vor Dateistart, alte Daten/Kalibrierung
+erhalten, Short-Write, falscher Dateiinhalt, Schreib-/Closefehler, Ctrl+C,
+fehlendes sync, Pin-Konflikt und CH3-Bericht erst nach bestaetigtem PIO-Stop.
+Nur temporaere Hostdateien/Stubuhr, keine MCU-/GPIO-Zugriffe.
+
+Weder CH3-Anschlagpulse noch Flashlatenzen sind physisch gemessen. Kein
+Fluglogger/LED aktiviert, kein Flash im vorhandenen Regler, kein Upload und
+keine neue Flugqualifikation. **Kein fester Flugtimer** ist die neue Vorgabe;
+Speicherfuellung bleibt eine gesonderte Grenze mit weiterlaufendem MANUAL.
+[Plan und L1/L2-Anleitung](FLUGLOGGER_PLAN_UND_BODENTEST.md).
+
+## L1/L2-Ergebnisse und L3-RAM-Vorbereitung, 2026-10-21
+
+L1 bestaetigt CH3-Pulse 998..1998 us mit sauberem PIO-Stop. Zuordnung durch
+Besitzernachtrag: unten 998/oben 1998. L2 verified fuer drei 64-KiB-Dateien,
+keine Speicherfehler, aber write bis 72.098 ms, flush bis 114.338 ms und Zyklus
+bis 181.709 ms. Damit ueberschreitet der getestete Dateiwriter die aktuelle
+50-ms-Steuerungsgrenze. Keine Integration dieses Pfads in MANUAL.
+[Rohberichte und Auswertung](testdaten/logger_boden/AUSWERTUNG_L1_L2.md).
+
+Vier neue Hosttests fuer RAM-Probe: Zielpuffer/Reserve, zu wenig RAM ohne
+Allokationsversuch, Fragmentierung/MemoryError ohne stilles Verkleinern,
+tatsaechliche Reserve nach Allokation. 150 Tests bestanden. Neue Benchversion
+0.1.1 sichert ausserdem Timing-Schwellen explizit. Die damalige L3-Vorbereitung
+qualifiziert noch keine echte Fluglogger-App; Besitzerresultat folgt unten.
+
+## L3-Ergebnis und Blockvariante, 2026-10-21
+
+Besitzerlauf mit 0.1.1: allocation_failed bei 91008 B Einzelallokation, trotz
+164880 B Gesamtfreiraum. Kein Beleg fuer die genaue Heapaufteilung oder eine
+bereits passende Kapazitaet; [Auswertung](testdaten/logger_boden/AUSWERTUNG_L3.md).
+Bench 0.1.2 nutzt vorab reservierte Recordbloecke, standardmaessig 39 * 2304 B
+plus 1152 B. Gleiche 632 Records, gleiche 65536-B-Reserve; kein Flugtimer.
+Inhaltsprobe kontrolliert alle Recordgrenzen. Fehler/Abbruch gibt Puffer vor
+JSON-Export frei. RAM-Pruefung inklusive Objekt-/Listenoverhead nach GC.
+
+Sechs zusaetzliche Hosttests gegenueber 150: Records ueber alle Blockgrenzen,
+Index-/Freigabegrenzen, ungueltige Groessen ohne Allokation, fehlerhafte
+Blockgroesse, Teilallokation mit MemoryError/Ctrl+C und Inhaltspruefungsfehler.
+Bestehender Erfolgstest modelliert nun einen Heap, der >4096-B-Allokationen
+abweist, aber alle 40 Zielbloecke aufnimmt. Bestehende Reserve-/Fehlerfaelle
+bleiben abgedeckt. **156 Tests bestanden** bei dieser Vorbereitung; damals
+noch keine MCU-Messung der Blockvariante und kein finaler Encoder/Gesamtlauf.
+
+Nachtrag: Besitzerbericht 0.1.2, 162608 B vorher frei, allocation_failed in
+Phase allocate. 40 Bloecke/maximal 2304 B sind Planwerte, kein Erfolgszaehler.
+Vorliegendes JSON bestimmt weder konkreten Block noch MemoryError-Text.
+Kein Nachweis der genauen Ursache; Report unveraendert unter L3_bloecke/ archiviert.
+0.1.3 erfasst echte Erfolgszaehler/letzte Anforderung, freien Heap beim Fehler
+vor Cleanup, MemoryError-Meldung und Kontext. mem_info/Traceback nur in Konsole.
+Zwei neue Regressionen: Diagnose nach Teilallokation vor Freigabe und Fehler
+ausserhalb des Block-Allokators ohne falsche Bytearray-Fehlerzuordnung.
+**158 Hosttests bestanden** bei der Diagnosevorbereitung; Boardlauf folgt unten.
+
+Resultat 0.1.3: 35 Bloecke/80640 B erfolgreich, 36. Block scheitert mit
+2304-B-MemoryError bei 79552 B frei. failure_location=block_allocator. Kein
+vollstaendiger Puffer, starker Fragmentierungshinweis; Konsole nicht vorliegend.
+0.1.4 aendert gezielt die Reihenfolge: voller Puffer vor denselben grossen
+Imports, Reserve erst nach Imports/Inhaltspruefung/GC. Kein reduzierter
+Modulumfang, Datensatz oder Reservewert. Laufende Steuerung unveraendert.
+Drei neue Regressionen pruefen Reihenfolge plus strikte Reserve nach Imports,
+Pufferfreigabe bei Import-/Compilerfehler und Ctrl+C sowie den echten run_ram-
+Einstieg mit dieser Reihenfolge. **161 Hosttests bestanden** bei Vorbereitung.
+Besitzerlauf 0.1.4 bestaetigt inzwischen 40 Bloecke/91008 B, Inhalt/Imports
+und 68656 B freie Reserve. Rohbericht unter L3_frueh/; Vorprobe abgeschlossen.
+
+## Kombinierter Logger 0.1.0, 2026-10-21
+
+Besitzer bestaetigt 1 Hz fuer erste Basisfluege und zugaenglichen BOOT.
+Expliziter flight_start reserviert vor Imports, ruft app mit optionaler Session
+im SENSOR/MANUAL-Profil auf und stellt RAM-Konfiguration nach Stop wieder her.
+CH3 ist getrennt von Steuerachsen; GPS/Baro/LED/BOOT nach Ausgabe, vor
+Workmessung. Keine Flashzugriffe im Loop. 144-B-Encoder, 46 CSV-Spalten,
+Gueltigkeits-/Altersfelder, ganze Segmente, keine stille Ringueberschreibung.
+
+22 zusaetzliche Hosttests: 16 fuer Encoder/BOOT/CH3/volle Kapazitaet/GPS-
+Paarcache/Fehler/Export/Pending-Daten/Startupreserve/Launcher; sechs fuer
+getrennte PIO-Domaenen und echte app.run-Integration. Geprueft sind insbesondere
+weitere MANUAL-Kommandos nach Loggerfehler, Timingfault nach 60-ms-Zusatzarbeit,
+kein Export bei Abschaltfehler und keine frisch geloggten alten IMU-Winkel.
+Virtueller Lauf laeuft nach zehn Minuten und vollem Puffer weiter, ohne Dateien
+zu schreiben. Exporttest sichert CSV/JSON erst nach bestaetigtem Stop und
+ueberschreibt keinen vorigen Lauf. Speicherfehler behaelt RAM zur Wiederholung.
+**183 Hosttests bestanden.** Pausierte Iterationen pollen weiter, erzeugen aber
+keine Record-Snapshots/Hoehenrechnung; auch das ist hostgeprueft.
+MicroPython-Compiler, echte RAM-Reserve mit
+neuen Modulen/Objekten, GPIO16-NeoPixel, BOOTSEL-Kosten, PIO und Gesamt-Timing
+sind damit nicht physisch validiert. F1/F2 stehen aus:
+[FLUGLOGGER_TEST.md](FLUGLOGGER_TEST.md). Kein Hardwarezugriff durch den Agenten.
 
 ## Besitzerbericht: Roll-Tischtest am 2026-10-12
 

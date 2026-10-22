@@ -8,6 +8,7 @@ Kein Servo wird hier angesteuert. Messbereich +/-2 g, +/-250 Grad/s.
 """
 import math
 import time
+from struct import unpack_from
 from machine import Pin, I2C
 
 
@@ -49,24 +50,29 @@ class IMU:
         self.buffer = bytearray(14)
         self.bias = (0.0, 0.0, 0.0)
         self.saturated = False
+        self.first_saturation = None  # Ein Rohsatz fuer die Diagnose, kein wachsender Log.
 
     def write(self, register, value):
         self.bus.writeto_mem(self.addr, register, bytes([value]))
 
     def read(self):
         self.bus.readfrom_mem_into(self.addr, 0x3B, self.buffer)
-        values = []
-        for i in range(0, 14, 2):
-            raw = (self.buffer[i] << 8) | self.buffer[i+1]
-            values.append(raw-65536 if raw & 0x8000 else raw)
-        self.saturated = (any(abs(values[i]) >= 32700 for i in (0, 1, 2)) or
-                          any(abs(values[i]) >= 32095 for i in (4, 5, 6)))
-        acc = [(values[i]/16384 - self.settings['acc_offset'][i]) /
-               self.settings['acc_scale'][i] for i in range(3)]
-        gyro = [values[i]/131 for i in (4, 5, 6)]
-        axes, signs = self.settings['body_axes'], self.settings['body_signs']
-        return tuple(signs[i]*acc[axes[i]] for i in range(3)) + tuple(
-            signs[i]*gyro[axes[i]]-self.bias[i] for i in range(3))
+        # Ein entpackter Rohsatz statt Python-Schleife und Generatoren je Messung:
+        # weniger kurzlebige Objekte im langsamen IMU-/Lageabschnitt von F2.
+        values = unpack_from('>7h', self.buffer)
+        self.saturated = (max(abs(values[0]), abs(values[1]), abs(values[2])) >= 32700 or
+                          max(abs(values[4]), abs(values[5]), abs(values[6])) >= 32095)
+        if self.saturated and self.first_saturation is None:
+            self.first_saturation = values  # ax,ay,az,Temperatur,gx,gy,gz, alle roh.
+        offset, scale = self.settings['acc_offset'], self.settings['acc_scale']
+        acc = ((values[0]/16384-offset[0])/scale[0],
+               (values[1]/16384-offset[1])/scale[1],
+               (values[2]/16384-offset[2])/scale[2])
+        gyro = (values[4]/131, values[5]/131, values[6]/131)
+        x, y, z = self.settings['body_axes']
+        sx, sy, sz = self.settings['body_signs']
+        return (sx*acc[x], sy*acc[y], sz*acc[z],
+                sx*gyro[x]-self.bias[0], sy*gyro[y]-self.bias[1], sz*gyro[z]-self.bias[2])
 
     def calibrate_gyro(self, std_limit=1.0):
         self.bias = (0.0, 0.0, 0.0)

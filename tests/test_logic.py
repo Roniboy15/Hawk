@@ -131,6 +131,7 @@ class ReceiverTests(unittest.TestCase):
 
         class StateMachine:
             def __init__(self, *args, **kwargs):
+                self.index = args[0]
                 self.queue, self.actions = [], []
                 self.fail_stop = False
                 owner.devices.append(self)
@@ -151,6 +152,17 @@ class ReceiverTests(unittest.TestCase):
             item.start()
             self.addCleanup(item.stop)
         self.rx = receiver.Receiver(config.RECEIVER, ('roll', 'pitch'), 100)
+
+    def test_aux_channel_uses_different_state_machine_and_freshness_domain(self):
+        aux=receiver.Receiver({'record':{'pin':14}},('record',),100,sm_start=3)
+        self.assertEqual([device.index for device in self.devices],[0,1,3])
+        self.rx.poll(100)
+        for device in self.devices[:2]: device.queue=[1500]
+        self.rx.poll(110)
+        aux.poll(110)
+        self.assertTrue(self.rx.all_fresh(110))
+        self.assertFalse(aux.all_fresh(110))
+        aux.close()
 
     def test_first_poll_discards_unknown_age(self):
         self.devices[0].queue = [1800]
@@ -454,6 +466,20 @@ class PureTests(unittest.TestCase):
                 pose.update(values, 0.01)
             self.assertAlmostEqual(pose.angles()[index-3], expected, places=2)
 
+    def test_combined_rotation_with_variable_steps_matches_axis_angle(self):
+        rates = (35, -20, 15)
+        pose = Attitude(gain=0)
+        steps = (0.005, 0.015, 0.01, 0.02)*20
+        for dt in steps:
+            pose.update((0, 0, 1)+rates, dt)
+        speed = math.sqrt(sum(v*v for v in rates))
+        half_angle = math.radians(speed*sum(steps))/2
+        expected = (math.cos(half_angle),)+tuple(
+            math.sin(half_angle)*v/speed for v in rates)
+        for actual, reference in zip(pose.q, expected):
+            self.assertAlmostEqual(actual, reference, delta=1e-5)
+        self.assertAlmostEqual(sum(v*v for v in pose.q), 1)
+
     def test_gravity_feedback_sign(self):
         pose = Attitude(gain=2)
         roll = math.radians(10)
@@ -548,6 +574,33 @@ class PureTests(unittest.TestCase):
         self.assertEqual(sensor.read(), (0.0625, -0.5, 0.4375, 10.0, -20.0, 30.0))
         self.assertFalse(sensor.saturated)
 
+    def test_imu_saturation_boundaries_keep_first_raw_event_after_recovery(self):
+        for index, limit in ((0, 32700), (1, 32700), (2, 32700),
+                             (4, 32095), (5, 32095), (6, 32095)):
+            for sign in (-1, 1):
+                with self.subTest(index=index, sign=sign):
+                    sensor = IMU.__new__(IMU)
+                    sensor.settings = dict(config.SENSOR, acc_offset=(0, 0, 0),
+                                           acc_scale=(1, 1, 1))
+                    sensor.addr, sensor.bias = 0x68, (0, 0, 0)
+                    sensor.buffer, sensor.first_saturation = bytearray(14), None
+                    raw = [0, 0, 16384, -32768, 0, 0, 0]  # Temperatur ist keine Saettigung.
+                    def read(address, register, target):
+                        target[:] = b''.join((v & 65535).to_bytes(2, 'big') for v in raw)
+                    sensor.bus = types.SimpleNamespace(readfrom_mem_into=read)
+                    raw[index] = sign*(limit-1)
+                    sensor.read()
+                    self.assertFalse(sensor.saturated)
+                    raw[index] = sign*limit
+                    sensor.read()
+                    first = tuple(raw)
+                    self.assertTrue(sensor.saturated)
+                    self.assertEqual(sensor.first_saturation, first)
+                    raw[:] = [0, 0, 16384, 0, 0, 0, 0]
+                    sensor.read()
+                    self.assertFalse(sensor.saturated)
+                    self.assertEqual(sensor.first_saturation, first)
+
     def test_mount_change_requires_new_level_and_level_calibration_keeps_rc(self):
         previous = {'roll': 0.0, 'pitch': 0.0, 'axes': [0, 1, 2], 'signs': [1, 1, 1],
                     'offset': list(config.SENSOR['acc_offset']),
@@ -578,10 +631,12 @@ class PureTests(unittest.TestCase):
 
 class FlowTests(unittest.TestCase):
     def simulate(self, scenario, axes=('roll',), mode='stabilize', save_log=False,
-                 expected_error=None, failed_axis='pitch', log_hz=100):
+                 expected_error=None, failed_axis='pitch', log_hz=100, session=None):
         recorded = []
         state = {'iteration': 0, 'closed': False, 'write_times': [], 'saved_logs': [],
                  'pulse_records': [], 'log_rows': [], 'reports': []}
+        if session is not None:
+            session.test_state=state
 
         class Clock:
             value = (1 << 30)-15000 if scenario == 'wrap' else 1000000
@@ -604,6 +659,10 @@ class FlowTests(unittest.TestCase):
                 angle = 10 if scenario == 'bank_right' else -10 if scenario == 'bank_left' else 0
                 return (0, math.sin(math.radians(angle)), math.cos(math.radians(angle)))
             def read(self):
+                if scenario == 'saturation':
+                    self.saturated = state['iteration'] == 4
+                    if self.saturated:
+                        self.first_saturation = (32700, 0, 16384, 0, 0, 0, 0)
                 if scenario == 'sensor_error' and state['iteration'] >= 4:
                     raise OSError('Sensor abgezogen')
                 if scenario in ('timing', 'timing_rearm') and state['iteration'] == 4:
@@ -725,11 +784,117 @@ class FlowTests(unittest.TestCase):
              patch.object(BenchDiagnostics, 'save', save_report), \
              contextlib.redirect_stdout(transcript):
             if expected_error is None:
-                app.run()
+                app.run(session=session)
             else:
                 with self.assertRaises(expected_error):
-                    app.run()
+                    app.run(session=session)
         return recorded, state, transcript.getvalue()
+
+    def flight_session(self, failure=False, delay=False, stop_at=None, close_failure=False):
+        owner=self
+        class Session:
+            def __init__(self):
+                self.contexts=[]
+                self.closed=False
+                self.exported=False
+                self.failures=[]
+                self.settings={'led_brightness':12}
+            def start(self,metadata): pass
+            def step(self,now,control):
+                self.contexts.append(control)
+                if failure and len(self.contexts)==4:
+                    raise ValueError('logger error')
+                if delay and len(self.contexts)==4:
+                    from flight_logger import FlightSession
+                    import flight_logger
+                    self.gc_probe=types.SimpleNamespace(clock=app.time,
+                        settings=config.FLIGHT_LOGGER, gc_work_limit_us=15000,
+                        gc_min_free=None, gc_count=0, gc_max_us=0, gc_deferred=0,
+                        gc_check_ms=None, gc_pending=False, startup_gc_us=24000)
+                    with patch.object(flight_logger.gc,'mem_free',return_value=32000,create=True), \
+                         patch.object(flight_logger.gc,'collect',side_effect=lambda:app.time.sleep_us(60000)):
+                        FlightSession._collect_if_due(self.gc_probe,control['iteration_start_us'])
+                return self.test_state['iteration']==stop_at
+            def fail(self,name,error): self.failures.append(name)
+            def color(self,value): pass
+            def close(self):
+                self.closed=True
+                if close_failure: raise OSError('aux shutdown')
+            def export(self,metadata,diagnostics,reason):
+                owner.assertTrue(self.test_state['rx_closed'])
+                if self.test_state.get('out_created'):
+                    owner.assertTrue(self.test_state['closed'])
+                owner.assertTrue(self.closed)
+                self.exported,self.reason=True,reason
+                self.metadata=metadata
+                return {'shutdown_ok':True}
+        return Session()
+
+    def test_flight_ground_stop_exports_only_after_all_control_resources_close(self):
+        session=self.flight_session(stop_at=6)
+        records,state,_=self.simulate('normal',mode='manual',session=session)
+        self.assertTrue(records)
+        self.assertEqual(state['iteration'],6)
+        self.assertTrue(session.exported)
+        self.assertEqual(session.reason,'ground_button')
+        self.assertEqual(state['saved_logs'],[])  # Kein zweiter Text-Ringexport.
+
+    def test_flight_logger_exception_leaves_manual_commands_running(self):
+        session=self.flight_session(failure=True)
+        records,state,_=self.simulate('normal',mode='manual',session=session)
+        self.assertIn('logger',session.failures)
+        self.assertEqual(records[-1][0],10)
+        self.assertNotEqual(records[-1][1]['roll'],0)
+        self.assertTrue(session.exported)
+
+    def test_flight_slow_extra_work_is_in_timing_fault_detection(self):
+        session=self.flight_session(delay=True)
+        records,state,text=self.simulate('normal',mode='manual',session=session)
+        self.assertIn('TIMING',text)
+        after=[offset for iteration,offset in records if iteration>=5]
+        self.assertTrue(after)
+        self.assertTrue(all(offset=={} for offset in after))
+        self.assertEqual(session.gc_probe.gc_count,1)
+        self.assertEqual(session.gc_probe.gc_max_us,60000)
+        report=session.stage_timing.report()
+        self.assertEqual(report['worst_period_us'],60000)
+        self.assertEqual(report['preceding_stages_us'][8],60000)
+
+    def test_flight_aux_shutdown_failure_prevents_export_but_closes_controls(self):
+        session=self.flight_session(close_failure=True)
+        records,state,text=self.simulate('normal',mode='manual',session=session)
+        self.assertTrue(state['closed'])
+        self.assertTrue(state['rx_closed'])
+        self.assertFalse(session.exported)
+        self.assertIn('kein Logexport',text)
+
+    def test_sensor_profiling_keeps_slow_work_visible_to_timing_fault(self):
+        session=self.flight_session(delay=True)
+        records,state,text=self.simulate('normal',mode='sensor',session=session)
+        report=session.stage_timing.report()
+        self.assertEqual(report['worst_period_us'],60000)
+        self.assertEqual(report['preceding_stages_us'][8],60000)
+        self.assertIn('TIMING',text)
+        self.assertFalse(records)  # Auch mit Profiling niemals SENSOR-PWM.
+
+    def test_flight_imu_error_cannot_log_old_angles_as_fresh(self):
+        session=self.flight_session()
+        self.simulate('sensor_error',mode='manual',session=session)
+        self.assertTrue(any(row['imu_fresh'] for row in session.contexts))
+        failed=[row for row in session.contexts if row['fault']=='IMU_RUNTIME']
+        self.assertTrue(failed)
+        self.assertTrue(all(not row['imu_fresh'] for row in failed))
+
+    def test_imu_range_event_is_exported_without_stopping_manual(self):
+        session = self.flight_session()
+        records, state, text = self.simulate('saturation', mode='manual', session=session)
+        self.assertIn('Messbereich ueberschritten', text)
+        self.assertEqual(session.metadata['imu_first_saturation_raw'],
+                         (32700, 0, 16384, 0, 0, 0, 0))
+        self.assertTrue(any(not c['imu_fresh'] for c in session.contexts))
+        self.assertTrue(session.contexts[-1]['imu_fresh'])
+        self.assertEqual(session.contexts[-1]['fault'], 'IMU_RUNTIME')
+        self.assertNotEqual(records[-1][1]['roll'], 0)
 
     def test_start_then_trim_keeps_control(self):
         records, state, text = self.simulate('normal')

@@ -75,7 +75,8 @@ EVENT_CAPACITY = 64                # letzte Zustands-/Fault-Wechsel; ganze Laufs
 CONSOLE_HZ = 4
 SAVE_LOG_ON_STOP = True            # erst NACH Abschalten der PWM auf Flash
 
-# Separater GPS-/Barometer-Funktionstest; app.run() nutzt diese Module noch nicht.
+# GPS-/Barometerpins fuer Funktionstest und die explizite Fluglogger-Session.
+# app.run() ohne Session nutzt diese Module weiterhin nicht.
 # Keine GPS-Konfiguration senden: GPS-RX bleibt frei, GP12 ist nur reservierter TX.
 # Neuer I2C1-Bus schuetzt den bestehenden IMU-Bus auf GP4/GP5 vor Umbauten.
 GPS = {'uart': 0, 'tx': 12, 'rx': 13, 'baudrate': 9600,
@@ -88,3 +89,38 @@ BAROMETER = {'i2c': 1, 'sda': 10, 'scl': 11, 'freq': 100000,
 SENSOR_TEST = {'version': '0.2.0', 'loop_us': 10000, 'log_hz': 2,
                'console_hz': 1, 'max_log_bytes': 65536, 'reserve_bytes': 32768,
                'reference_warmup_ms': 2000, 'reference_samples': 20}
+
+# Separate Bodenmessungen und explizite Fluglogger-Session.
+# CH3 ist ein Logbefehl, KEINE vierte Steuerachse.
+# GP14 ist im bisherigen Plan frei; vor Anschluss 3V3-Signalpegel pruefen.
+# L1 vom 2026-10-21: unten 998 us, oben 1998 us; Zuordnung vom Besitzer
+# bestaetigt. Die Schwellen liegen mit Abstand innerhalb der Endbereiche.
+# Nur via flight_start angebunden; der bisherige App-/main-Start bleibt gleich.
+RECORDING_CHANNEL = {'pin': 14, 'low_us': 1200, 'high_us': 1800,
+                     'hold_ms': 200, 'sign': 1}
+LOGGER_BENCH = {'version': '0.1.4', 'channel_pin': RECORDING_CHANNEL['pin'], 'poll_us': 10000,
+                'console_hz': 2, 'case_bytes': 65536,
+                'block_sizes': (512, 1024, 4096), 'reserve_bytes': 131072,
+                # Nur RAM-Dimensionierungsprobe, KEIN Flugtimer/Encoderformat.
+                'ram_record_bytes': 144, 'ram_log_hz': 1, 'ram_target_seconds': 600,
+                'ram_event_records': 32, 'ram_reserve_bytes': 65536,
+                # L3: kleine, recordbuendige Bloecke statt eines 91-kB-Blocks.
+                # Datenmenge/Reserve bleiben gleich; kein Flug-Abschalttimer.
+                'ram_records_per_block': 16}
+
+# Explizit via flight_start.run('sensor'/'manual'), niemals vom main-Autostart.
+# Besitzerwahl: 1-Hz-Basisdaten, CH3 Start/Pause, BOOT nach Landung zum Export.
+# 632 Records sind Kapazitaet, kein Timer; Ereignisse verbrauchen ebenfalls Slots.
+FLIGHT_LOGGER = {'version': '0.1.8', 'capacity': 632, 'record_bytes': 144,
+                 'records_per_block': 16, 'sample_ms': 1000,
+                 'reserve_bytes': 65536, 'flash_reserve_bytes': 131072,
+                 # Start-GC ca. 24 ms: Bereinigung nach kurzen Iterationen planen,
+                 # bevor der Heap voll ist. Automatische GC bleibt eingeschaltet.
+                 # 200 ms reichen bei temporaeren IMU-/Lageobjekten zum Leeren
+                 # des Heaps zwischen zwei Pruefungen. Frueher pruefen, damit
+                 # GC am budgetgeprueften Loopende statt mitten im RC-Pfad laeuft.
+                 'gc_free_bytes': 32768, 'gc_work_limit_us': 15000, 'gc_poll_ms': 20,
+                 'stop_hold_ms': 2000, 'button_poll_ms': 50,
+                 'led_pin': 16, 'led_brightness': 12,
+                 'gps_ready_epochs': 5, 'gps_min_satellites': 6,
+                 'gps_max_hdop': 2.5}

@@ -47,7 +47,9 @@ def pulse_capture():
 
 
 class Receiver:
-    def __init__(self, settings, axes, timeout_ms, max_poll_ms=50):
+    def __init__(self, settings, axes, timeout_ms, max_poll_ms=50, sm_start=0):
+        if type(sm_start) is not int or not 0 <= sm_start <= 7 or sm_start+len(axes) > 8:
+            raise ValueError('Ungueltiger PIO-Zustandsautomatbereich')
         self.channels = {}
         self.timeout = timeout_ms
         self.max_poll_ms = max_poll_ms
@@ -55,7 +57,7 @@ class Receiver:
         try:
             for index, axis in enumerate(axes):
                 pin = Pin(settings[axis]['pin'], Pin.IN, Pin.PULL_DOWN)
-                sm = rp2.StateMachine(index, pulse_capture, freq=2000000,
+                sm = rp2.StateMachine(sm_start+index, pulse_capture, freq=2000000,
                                       in_base=pin, jmp_pin=pin)
                 self.channels[axis] = {'sm': sm, 'pulse': None, 'time': None,
                                        'sequence': 0}

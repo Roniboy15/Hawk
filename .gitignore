@@ -6,6 +6,8 @@ bench_*.csv
 bench_*.json
 sensors_*.csv
 sensors_*.json
+flight_*.csv
+flight_*.json
 # Reviewed bench evidence; other automatically generated logs stay ignored.
 !docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.csv
 !docs/testdaten/Tischtests_v0.2.3-bench/T5/bench_124724.json
@@ -14,5 +16,53 @@ sensors_*.json
 # Reviewed S3 evidence; keep all other generated sensor logs ignored.
 !docs/testdaten/S3_gps_and_baro/sensors_2344143_0.csv
 !docs/testdaten/S3_gps_and_baro/sensors_2344143_0.json
+
+# Separate Logger-Bodenmessungen; ausgewaehlte JSON-Nachweise spaeter versionieren.
+logger_storage_*.bin
+logger_storage_*.json
+logger_channel_*.json
+logger_ram_*.json
+# Ausgewaehlte L1/L2-Nachweise bleiben mit der Auswertung nachvollziehbar.
+!docs/testdaten/logger_boden/L1/logger_channel_98943_0.json
+!docs/testdaten/logger_boden/L2/logger_storage_275085_0.json
+# Erster L3-Lauf: Allokationsfehler als unveraenderter Nachweis.
+!docs/testdaten/logger_boden/L3/logger_ram_357044_0.json
+# L3-Wiederholung mit Blocklayout; Rohbericht unveraendert erhalten.
+!docs/testdaten/logger_boden/L3_bloecke/logger_ram_1246428_0.json
+# Diagnose: 35 Bloecke angelegt, 36. Block scheitert bei 79552 B frei.
+!docs/testdaten/logger_boden/L3_diagnose/logger_ram_2167178_0.json
+# Erfolgreiche Vorprobe mit frueher Allokation.
+!docs/testdaten/logger_boden/L3_frueh/logger_ram_36572_0.json
+# Erster kombinierter Loggerlauf: Bedienung belegt, TIMING und GPS-Fix offen.
+!docs/testdaten/fluglogger/F1_sensor/flight_327002_0.csv
+!docs/testdaten/fluglogger/F1_sensor/flight_327002_0.json
+# F1-Phasendiagnose: ausgewaehlte unveraenderte Rohdaten.
+!docs/testdaten/fluglogger/F1_timing/flight_242233_0.csv
+!docs/testdaten/fluglogger/F1_timing/flight_242233_0.json
+# Erster Vergleich mit wiederverwendetem GPS-Snapshot.
+!docs/testdaten/fluglogger/F1_vergleich_012/flight_177217_0.csv
+!docs/testdaten/fluglogger/F1_vergleich_012/flight_177217_0.json
+# 0.1.3: fehlgeschlagener Lauf mit GPS-MemoryError als Nachweis erhalten.
+!docs/testdaten/fluglogger/F1_gc_013/flight_265737_0.csv
+!docs/testdaten/fluglogger/F1_gc_013/flight_265737_0.json
+# 0.1.4: GPS-Ausfall trotz arbeitender GC; unveraenderte Rohdaten.
+!docs/testdaten/fluglogger/F1_gc_014/flight_68106_0.json
+!docs/testdaten/fluglogger/F1_gc_014/flight_62671_0.json
+!docs/testdaten/fluglogger/F1_gc_014/flight_62671_0.csv
+# 0.1.5: GPS-Empfang ohne Speicherfehler, SENSOR-Zeiten/Export dokumentiert.
+!docs/testdaten/fluglogger/F1_gps_015/flight_344020_0.json
+!docs/testdaten/fluglogger/F1_gps_015/flight_344020_0.csv
+# F2: TIMING ausloest globales Neutral und erneute Freigabe, Rohbefund erhalten.
+!docs/testdaten/fluglogger/F2_manual_015/flight_322120_0.json
+!docs/testdaten/fluglogger/F2_manual_015/flight_322120_0.csv
+# F2-Phasenmessung mit IMU-Messbereichsereignis und einer Timingueberschreitung.
+!docs/testdaten/fluglogger/F2_timing_016/flight_385195_0.json
+!docs/testdaten/fluglogger/F2_timing_016/flight_385195_0.csv
+# 0.1.7: zwei Timing-Aussetzer trotz entlastetem IMU-/Lagepfad.
+!docs/testdaten/fluglogger/F2_vergleich_017/flight_231333_0.json
+!docs/testdaten/fluglogger/F2_vergleich_017/flight_231333_0.csv
+# 0.1.8: erster MANUAL-Vergleich ohne Timing- oder RC-Unterbrechung.
+!docs/testdaten/fluglogger/F2_gc_018/flight_813555_0.json
+!docs/testdaten/fluglogger/F2_gc_018/flight_813555_0.csv
 .venv/
 .thonny/

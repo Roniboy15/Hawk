@@ -1,10 +1,18 @@
 # Einbau und erster MANUAL-Datenflug: konkreter Arbeitsplan
 
-Stand 2026-10-20. S1/S2/S3 sind funktional bestanden; siehe
+Aktualisiert 2026-10-22. S1/S2/S3 sind funktional bestanden; siehe
 [S3-Auswertung](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
-Der naechste Codeumfang ist ein MANUAL-Fluglogger, keine neue Stabilisierung
-oder autonome Kreisfuehrung. Die folgenden Bordstart-/Loggerfunktionen sind
-ein Implementierungsauftrag, noch keine im aktuellen Code vorhandene Flugfunktion.
+L3-RAM-Vorprobe ist inzwischen bestanden. Ein expliziter MANUAL-Loggerprototyp
+1-Hz-Logger mit CH3 Start/Pause und BOOT-Bodenstop ist vorhanden. F2 0.1.8
+hat den gezielten MANUAL-Bodenvergleich ueber288.274 s ohne Timing-/RC-
+Unterbrechung nach Freigabe bestanden. GPS hat in diesem Lauf keinen Fix.
+Naechster Schritt: Stand sichern, MCU-Bordversorgung/bewussten Loggerstart
+ohne Mac vorbereiten, dann kombinierter GPS-/10-min-Bodentest:
+[aktueller Befund](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md),
+[Testanleitung](FLUGLOGGER_TEST.md).
+Die folgenden Punkte enthalten den urspruenglichen Einbau-/Implementierungsplan;
+Standalone-Bordstart und physischer Gesamtnachweis stehen weiterhin aus.
+Keine neue Stabilisierung oder autonome Kreisfuehrung.
 Die akzeptierte MCU-Abhaengigkeit des bisherigen MANUAL-Durchgangs bleibt.
 
 ## 1. Versorgung vor dem festen Einbau aufzeichnen
@@ -142,8 +150,17 @@ rechtwinklige Achsenzuordnungen. Deshalb die IMU achsparallel fest montieren.
 
 ## 5. Naechster Codeauftrag: MANUAL-Fluglogger
 
-Vorgeschlagener neuer Branch: **codex/manual-flight-logger**, vom noch
-freizugebenden Sensorabschlusscommit. Folgende Punkte dort implementieren:
+**Befund 2026-10-21:** L1 ist bestaetigt, der L2-Dateiwriter blockiert bis
+181.709 ms. Den folgenden Entwurf fuer hohe Raten deshalb nicht direkt mit
+Flash im Steuerungsloop umsetzen. L3 0.1.4 ist bestanden; der implementierte
+Prototyp nutzt 1-Hz-Gesamtdatensaetze im RAM und Export nach Bodenstop.
+[Aktuell F1/F2 testen](FLUGLOGGER_TEST.md), kein weiterer isolierter L3.
+
+Aktiver Branch: **codex/manual-flight-logger**, vom Sensorabschluss e177cb5.
+Aktualisierter Besitzerwunsch: CH3 unten = MANUAL ohne Aufnahme, oben = MANUAL
+mit Aufnahme, kein fester Flugtimer. Der neue
+[Loggerplan mit CH3-/Flash-Bodenmessungen](FLUGLOGGER_PLAN_UND_BODENTEST.md)
+ersetzt den frueheren Fuenf-Minuten-/1-Hz-Entwurf. Folgende Punkte integrieren:
 
 1. Bestehenden MANUAL-Durchgang und seine Neutralfreigabe beibehalten.
    GPS/MS5611 nur mit begrenztem Aufwand pollen; keine Fix-Warteschleife,
@@ -154,27 +171,32 @@ freizugebenden Sensorabschlusscommit. Folgende Punkte dort implementieren:
    Gesamte Iterationszeiten weiter aggregieren; Zusatzsensorzeit gesondert
    sichtbar machen. 1-Hz-Samples ersetzen keine Zeitstatistik jeder Iteration
    und keine hochaufloesende Regleranalyse.
-3. Zunaechst **5 min bei 1 Hz** als begrenzten MANUAL-Datenflug planen,
-   gepackten RAM-Bedarf mit den zusaetzlichen Feldern berechnen und freie
-   Reserve auf dem echten MCU pruefen. Das ist ein Startvorschlag, kein schon
-   zugesicherter Speicherumfang. Puffer vor Steuerungsstart reservieren.
+3. Aufnahme per CH3 beginnen/beenden, ganze Segmente ohne festen Flugtimer.
+   Erste Version nach Besitzerwahl 1 Hz fuer alle Gruppen, auf etwa zehn
+   Minuten plus Ereignisse dimensioniert. 25/10/1 Hz bleibt spaetere Erweiterung
+   mit geeignetem Speicherpfad. Freier Flash ist keine Echtzeitgarantie.
+   Puffer vor Steuerungsstart reservieren.
    Wenn er voll ist: Logging klar als voll markieren, MANUAL-Steuerung weiter
    betreiben; keinen automatischen Programmabbruch oder Ringverlust verstecken.
-4. Bewussten Bordstart und **nur am Boden** bedienten Stop/Export entwerfen.
+4. Bewussten Bordstart und getrennten endgueltigen Programmstop entwerfen.
    AUTO_START=False startet nach Einschalten noch kein MANUAL-Programm.
    Ein eigenes, geprueftes Startprofil ist noetig; kein stiller Defaultwechsel
-   fuer alle Sensor-/Thonnytests. Einen zugaenglichen dedizierten Bodeneingang
-   fuer Stop/Export vorsehen und gegen unbeabsichtigte Betaetigung sichern.
-   Nicht durch einen Flugtimer die manuelle Steuerung abschalten.
-5. Nach Landung Versorgung bis zum abgeschlossenen Export erhalten: Stop
-   beendet die Steuerung/Outputs bewusst, danach erst CSV/JSON schreiben.
+   fuer alle Sensor-/Thonnytests. CH3-Aufnahmestop funktioniert auch im Flug
+   und beendet niemals die Steuerung. Endgueltigen Programmstop nach Landung
+   getrennt bedienen; keinen CSV-Export bei noch laufender Steuerung starten.
+5. Nach Landung Versorgung bis zum bestaetigten Dateischluss erhalten.
+   Nur der endgueltige Programmstop beendet die Steuerung/Outputs bewusst.
+   CSV-Konvertierung im Prototyp erst nach bestaetigtem Hardwarestop am Boden;
+   keinen langen Export im Flug.
    Erst nach Abschluss ausschalten. Fuer das Herunterladen Mac-USB erst im
    zuvor geklaerten Strompfad anschliessen. Ein voller RAM-Puffer geht bei
    stromlosem Ausschalten verloren; einfach Akku ziehen sichert keine Daten.
 
 Der vorhandene sensor_test 0.2.0 ist dafuer eine Speicher-/Treiberbasis, aber
 enthaelt noch keine IMU-/RX-/Servodaten. app/bench verwendet weiterhin den
-alten Ring. Die hier genannten Punkte sind noch zu entwickeln und zu testen.
+alten Ring, wenn ohne Flugsession gestartet. Neuer flight_start nutzt die
+gemeinsame Logger-Session; F1 teilweise bestaetigt, Timingdiagnose/Freiluft-
+GPS-Bereitschaft, F2 und Bordstart stehen aus.
 
 ## 6. Bodenlauf im finalen Aufbau, danach erster Datenflug
 

@@ -1,0 +1,468 @@
+"""Fluglogger am Host: virtuelle Zeit/RC/Sensoren, nie echte Pins/PWM."""
+import contextlib
+import csv
+import io
+import json
+import math
+import os
+from pathlib import Path
+import sys
+import tempfile
+import types
+import unittest
+from unittest.mock import Mock, patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'firmware'))
+import config
+import flight_records as records
+import flight_logger
+import flight_start
+from diagnostics import BenchDiagnostics, StageTiming
+from ram_buffer import RecordBuffer
+
+MOD = 1 << 30
+
+
+class Clock:
+    us = 0
+    def ticks_ms(self): return self.us//1000 % MOD
+    def ticks_us(self): return self.us % MOD
+    @staticmethod
+    def ticks_diff(a,b): return (a-b+MOD//2) % MOD-MOD//2
+    def sleep_ms(self,n): self.us += n*1000
+
+
+def control():
+    return {'mode':'MANUAL', 'fault':'', 'angles':(3,-4,5),
+            'sample':(0.1,0.2,1,11,12,13), 'imu_fresh':True,
+            'rx':([1053,1554,1998],[10,11,12],[1,2,3]),
+            'pulses':{'roll':1300,'pitch':1500,'yaw':1650},
+            'armed':True,'fresh':True,'period_us':10000,
+            'work_to_log_us':2100,'imu_age_ms':0,'iteration_start_us':0}
+
+
+def fix(epoch='120000.000'):
+    return {'valid':True,'gga_valid':True,'rmc_valid':True,'utc':epoch,
+            'date':'211026','lat':47.355676,'lon':8.508009,'altitude_msl_m':455.2,
+            'speed_ms':4.2,'course_deg':270.1,'course_usable':True,'quality':1,
+            'satellites':11,'hdop':0.8,'gga_age_ms':100,'rmc_age_ms':20}
+
+
+def raw_record(buffer,index):
+    block,offset=buffer.slot(index)
+    return bytes(block[offset:offset+144])
+
+
+class RecordsTests(unittest.TestCase):
+    def test_stage_timing_preserves_previous_slow_iteration_across_tick_wrap(self):
+        clock=Clock()
+        clock.us=MOD-2000
+        stages=StageTiming(clock)
+        arrays=(stages.current,stages.maximum,stages.worst)
+        stages.begin(clock.ticks_us(),None)
+        clock.us+=1000
+        stages.mark(0)
+        clock.us+=60000
+        stages.mark(4)
+        clock.us+=500
+        stages.mark(8)
+        stages.begin(clock.ticks_us(),61500)
+        clock.us+=100
+        stages.mark(0)
+        stages.begin(clock.ticks_us(),10000)
+        report=stages.report()
+        self.assertEqual(report['preceding_iteration'],1)
+        self.assertEqual(report['worst_period_us'],61500)
+        self.assertEqual(report['preceding_stages_us'],[1000,0,0,0,60000,0,0,0,500])
+        self.assertEqual(report['max_us'][4],60000)
+        self.assertEqual(report['outside_stages_us'],0)
+        for before,after in zip(arrays,(stages.current,stages.maximum,stages.worst)):
+            self.assertIs(before,after)
+        clock.us-=1
+        stages.mark(0)
+        self.assertEqual(stages.report()['invalid'],1)
+
+    def test_144_byte_roundtrip_and_missing_values_preserve_coordinates(self):
+        buffer=RecordBuffer(2,144)
+        g=dict(fix(),utc_ms=43200000)
+        b={'valid':True,'pressure_pa':96001,'temperature_c':21.5,
+           'relative_height_m':2.25,'age_ms':5}
+        records.encode(buffer,0,2000,1,1,control(),g,b,1998,True,True,False)
+        row=next(csv.DictReader(io.StringIO(records.COLUMNS+'\n'+records.csv_row(buffer,0))))
+        self.assertEqual(records.RECORD_BYTES,144)
+        self.assertEqual(len(row),46)
+        self.assertEqual(row['mode'],'MANUAL')
+        self.assertEqual(row['date_ddmmyy'],'211026')
+        self.assertAlmostEqual(float(row['lat_deg']),g['lat'],places=8)
+        self.assertAlmostEqual(float(row['lon_deg']),g['lon'],places=8)
+        self.assertEqual(row['servo_roll_us'],'1300')
+        c=control()
+        c['imu_fresh']=False
+        b.update(valid=False,pressure_pa=None,temperature_c=None,relative_height_m=None,age_ms=-1)
+        records.encode(buffer,1,3000,1,3,c,{},b,None,False,False,False)
+        row=next(csv.DictReader(io.StringIO(records.COLUMNS+'\n'+records.csv_row(buffer,1))))
+        for key in ('roll_deg','gyro_roll_dps','lat_deg','lon_deg','utc_ms','pressure_pa'):
+            self.assertEqual(row[key],'')
+        self.assertEqual(row['baro_age_ms'],'-1')
+        self.assertEqual(row['ch3_us'],'0')
+
+    def test_ground_button_requires_release_hold_pause_and_handles_wrap(self):
+        stop=records.GroundStop(Clock.ticks_diff,2000)
+        self.assertFalse(stop.update(True,True,0))
+        self.assertFalse(stop.update(True,True,3000))
+        stop.update(False,True,MOD-3000)
+        stop.update(True,False,MOD-2500)
+        self.assertFalse(stop.update(True,False,MOD-100))
+        stop.update(True,True,MOD-1000)
+        self.assertFalse(stop.update(True,True,999))
+        self.assertTrue(stop.update(True,True,1000))
+
+
+class SessionTests(unittest.TestCase):
+    def setUp(self):
+        self.clock=Clock()
+        self.session=flight_logger.FlightSession(RecordBuffer(632,144),self.clock)
+        self.session.started=0
+        self.channel=types.SimpleNamespace(channels={'record':{'pulse':998}},
+                            poll=Mock(),fresh=lambda a,t:True,close=Mock())
+        self.session.aux=self.channel
+        self.session.button=lambda:False
+
+    def step(self,ms,pulse=None):
+        self.clock.us=ms*1000
+        if pulse is not None:
+            self.channel.channels['record']['pulse']=pulse
+        c=control()
+        c['iteration_start_us']=self.clock.ticks_us()
+        return self.session.step(self.clock.ticks_ms(),c)
+
+    def start_capture(self):
+        self.step(0,998)
+        self.step(200,998)
+        self.step(300,1998)
+        self.step(500,1998)
+
+    def test_ch3_pause_resume_and_loss_do_not_stop_or_write_files(self):
+        with patch('builtins.open',side_effect=AssertionError('Flash waehrend Loop')):
+            self.start_capture()
+            self.assertTrue(self.session.recording)
+            self.step(1500)
+            self.step(1600,998)
+            self.step(1800)
+            count=self.session.count
+            self.assertFalse(self.step(10000))
+            self.assertEqual(self.session.count,count)
+            self.step(11000,1998)
+            self.step(11200)
+            self.assertEqual(self.session.segment,2)
+            self.channel.fresh=lambda a,t:False
+            self.assertFalse(self.step(11300))
+            self.assertFalse(self.session.recording)
+            self.channel.fresh=lambda a,t:True
+            self.step(12000,1998)
+            self.step(12500)
+            self.assertFalse(self.session.recording)
+
+    def test_paused_loop_polls_sensors_but_does_not_build_record_snapshots(self):
+        with patch.object(self.session,'_poll_sensors') as poll, \
+             patch.object(self.session,'_snapshots',wraps=self.session._snapshots) as snapshots:
+            self.step(0,998)
+            self.step(100)
+            self.step(200)
+            self.assertEqual(poll.call_count,3)
+            snapshots.assert_not_called()
+            self.assertEqual(self.session.count,0)
+
+    def test_sensor_profiling_separates_slow_gps_and_baro_even_when_paused(self):
+        stages=StageTiming(self.clock)
+        self.session.stage_timing=stages
+        self.session.gps=types.SimpleNamespace(
+            poll=lambda now:self.clock.sleep_ms(60),snapshot=lambda now,result=None:fix())
+        self.session.baro=types.SimpleNamespace(poll=lambda now:self.clock.sleep_ms(8))
+        stages.begin(0,None)
+        with patch('builtins.open',side_effect=AssertionError('Flash waehrend Messung')):
+            self.assertFalse(self.step(0,998))
+        stages.mark(8)
+        stages.begin(self.clock.ticks_us(),68000)
+        report=stages.report()
+        self.assertEqual(report['preceding_stages_us'][4:6],[60000,8000])
+        self.assertEqual(self.session.count,0)
+        self.assertFalse(self.session.recording)
+
+    def test_planned_gc_runs_in_light_loop_and_its_cost_is_not_hidden(self):
+        self.session.gc_work_limit_us=15000
+        with patch.object(flight_logger.gc,'mem_free',return_value=32000,create=True), \
+             patch.object(flight_logger.gc,'collect',side_effect=lambda:self.clock.sleep_ms(24)), \
+             patch('builtins.open',side_effect=AssertionError('Flash im Loop')):
+            self.assertFalse(self.step(0,998))
+        self.assertEqual(self.clock.us,24000)
+        self.assertEqual(self.session.gc_count,1)
+        self.assertEqual(self.session.gc_max_us,24000)
+        self.assertFalse(self.session.recording)
+
+    def test_planned_gc_defers_busy_loop_and_skips_sufficient_free_heap(self):
+        self.session.gc_work_limit_us=15000
+        with patch.object(flight_logger.gc,'mem_free',return_value=32000,create=True), \
+             patch.object(flight_logger.gc,'collect') as collect:
+            self.clock.us=16000
+            self.session._collect_if_due(0)
+            collect.assert_not_called()
+            self.assertEqual(self.session.gc_deferred,1)
+        with patch.object(flight_logger.gc,'mem_free',return_value=40000,create=True), \
+             patch.object(flight_logger.gc,'collect') as collect:
+            self.session._collect_if_due(16000)
+            collect.assert_not_called()
+        self.assertEqual(self.session.gc_count,0)
+
+    def test_slow_heap_query_does_not_starve_gc_in_an_eligible_loop(self):
+        self.session.gc_work_limit_us=15000
+        self.session.startup_gc_us=24000
+        self.clock.us=10000
+        def query():
+            self.clock.sleep_ms(7)
+            return 32000
+        with patch.object(flight_logger.gc,'mem_free',side_effect=query,create=True), \
+             patch.object(flight_logger.gc,'collect',side_effect=lambda:self.clock.sleep_ms(24)):
+            self.session._collect_if_due(0)
+        self.assertEqual(self.session.gc_count,1)
+        self.assertEqual(self.clock.us,41000)
+
+    def test_heap_queries_are_spaced_instead_of_scanning_every_iteration(self):
+        self.session.gc_work_limit_us=15000
+        interval=self.session.settings['gc_poll_ms']*1000
+        with patch.object(flight_logger.gc,'mem_free',return_value=40000,create=True) as query:
+            for us in (0,interval//2,interval-1,interval):
+                self.clock.us=us
+                self.session._collect_if_due(us)
+        self.assertEqual(query.call_count,2)
+
+    def test_heap_pressure_between_checks_does_not_force_unplanned_collection(self):
+        # MicroPython/Unix-Probe: ~5 KiB temporaere IMU-/Lageobjekte je Schritt.
+        # Mit 200-ms-Abfrage kann der Heap vor der naechsten Pruefung leer sein.
+        # 7-ms-Heapscan/24-ms-GC sind simulierte Kosten aus den Bodenbefunden.
+        free, unplanned = 66000, 0
+        self.session.gc_work_limit_us=15000
+        self.session.startup_gc_us=24000
+        def query():
+            self.clock.sleep_ms(7)
+            return free
+        def collect():
+            nonlocal free
+            self.clock.sleep_ms(24)
+            free=66000
+        with patch.object(flight_logger.gc,'mem_free',side_effect=query,create=True), \
+             patch.object(flight_logger.gc,'collect',side_effect=collect):
+            for i in range(1000):
+                start=self.clock.ticks_us()
+                free-=5120
+                if free < 0:
+                    unplanned+=1
+                    collect()
+                self.clock.sleep_ms(12)
+                self.session._collect_if_due(start)
+                self.clock.sleep_ms(3)
+        self.assertEqual(unplanned,0)
+        self.assertGreater(self.session.gc_count,0)
+
+    def test_pending_gc_retries_without_repeating_an_expensive_heap_scan(self):
+        self.session.gc_work_limit_us=15000
+        self.session.startup_gc_us=24000
+        self.clock.us=10000
+        def query():
+            self.clock.sleep_ms(20)
+            return 32000
+        with patch.object(flight_logger.gc,'mem_free',side_effect=query,create=True) as scanned, \
+             patch.object(flight_logger.gc,'collect',side_effect=lambda:self.clock.sleep_ms(24)):
+            self.session._collect_if_due(0)
+            self.assertEqual(self.session.gc_count,0)
+            self.clock.us=35000
+            self.session._collect_if_due(35000)
+        self.assertEqual(scanned.call_count,1)
+        self.assertEqual(self.session.gc_count,1)
+
+    def test_capacity_stops_only_recording_keeps_all_earlier_rows(self):
+        self.start_capture()
+        first=raw_record(self.session.buffer,0)
+        for second in range(1,700):
+            self.assertFalse(self.step(500+second*1000))
+        self.assertEqual(self.session.count,632)
+        self.assertTrue(self.session.full)
+        self.assertFalse(self.session.recording)
+        self.assertEqual(raw_record(self.session.buffer,0),first)
+        self.assertEqual(records.decode(self.session.buffer,631)[3],5)
+        self.assertFalse(self.step(900000))  # Kein zehnminuetiger Programmstop.
+
+    def test_latest_coherent_gps_pair_ages_during_mixed_epoch_then_expires(self):
+        gps=types.SimpleNamespace(poll=Mock(),snapshot=Mock())
+        def snapshot(now,result=None):
+            if result is None:
+                result={}
+            result.clear()
+            result.update(current)
+            return result
+        gps.snapshot.side_effect=snapshot
+        self.session.gps=gps
+        for index in range(5):
+            current=fix('12000%d.000'%index)
+            self.step(index*1000)
+        self.assertEqual(self.session.good_epochs,5)
+        mixed=fix('120005.000')
+        mixed['valid']=False
+        current=mixed
+        self.step(4500)
+        g,b=self.session._snapshots(4500)
+        self.assertTrue(g['valid'])
+        self.assertEqual(g['utc'],'120004.000')
+        self.assertEqual(g['gga_age_ms'],600)
+        self.assertEqual(self.session._snapshots(7000)[0],{})
+        current=dict(mixed,rmc_valid=False)
+        self.step(7100)
+        self.assertIsNone(self.session.fix)
+        self.assertEqual(self.session.good_epochs,0)
+
+    def test_repeated_same_epoch_does_not_make_gps_ready(self):
+        self.session.gps=types.SimpleNamespace(poll=Mock(),snapshot=lambda now,result=None:fix())
+        for ms in range(0,1000,10):
+            self.step(ms)
+        self.assertEqual(self.session.good_epochs,1)
+
+    def test_baro_fault_and_logger_fault_remain_local(self):
+        self.session.baro=types.SimpleNamespace(poll=Mock(side_effect=OSError('I2C')))
+        self.start_capture()
+        self.assertIn('barometer',self.session.errors)
+        self.assertTrue(self.session.recording)
+        self.session.fail('logger',ValueError('encode'))
+        self.assertFalse(self.step(1500))
+        self.assertFalse(self.session.recording)
+        self.assertTrue(self.session.disabled)
+
+    def test_boot_cannot_stop_capture_but_can_stop_after_ch3_pause(self):
+        self.start_capture()
+        self.session.button=lambda:True
+        for ms in (1000,2000,3000,4000):
+            self.assertFalse(self.step(ms))
+        self.step(4100,998)
+        self.step(4300)
+        self.assertFalse(self.step(4400))
+        self.assertFalse(self.step(6399))
+        self.assertTrue(self.step(6450))  # Naechste 50-ms-Buttonabfrage.
+
+    def test_close_attempts_uart_after_aux_close_failure(self):
+        self.channel.close.side_effect=OSError('PIO close')
+        self.session.uart=types.SimpleNamespace(deinit=Mock())
+        with self.assertRaises(OSError): self.session.close()
+        self.session.uart.deinit.assert_called_once_with()
+
+    def test_export_requires_shutdown_and_never_overwrites_existing_run(self):
+        self.start_capture()
+        self.step(1500)
+        self.session.stage_timing=StageTiming(self.clock)
+        diag=BenchDiagnostics(10000,50000,4)
+        with self.assertRaises(RuntimeError): self.session.export({},diag,'ground_button')
+        with tempfile.TemporaryDirectory() as folder:
+            previous=os.getcwd()
+            try:
+                os.chdir(folder)
+                self.session.can_export=True
+                Path('flight_1500_0.csv').write_text('old evidence')
+                with contextlib.redirect_stdout(io.StringIO()), \
+                     patch.object(flight_logger.os,'statvfs',return_value=(4096,4096,1024,512,512)):
+                    report=self.session.export({},diag,'ground_button')
+                self.assertEqual(report['csv_file'],'flight_1500_1.csv')
+                self.assertEqual(Path('flight_1500_0.csv').read_text(),'old evidence')
+                rows=list(csv.DictReader(io.StringIO(Path(report['csv_file']).read_text())))
+                self.assertEqual(len(rows),self.session.count)
+                self.assertEqual(rows[0]['kind'],'start')
+                self.assertEqual(json.loads(Path('flight_1500_1.json').read_text())['stop_reason'],
+                                 'ground_button')
+                self.assertEqual(report['stage_timing']['max_us'],[0]*9)
+                self.assertEqual(report['runtime_gc']['count'],0)
+                self.assertEqual(json.loads(Path('flight_1500_1.json').read_text())['stage_timing']['names'],
+                                 list(StageTiming.NAMES))
+            finally:
+                os.chdir(previous)
+
+    def test_low_flash_does_not_discard_ram(self):
+        self.start_capture()
+        before=raw_record(self.session.buffer,0)
+        self.session.can_export=True
+        with patch.object(flight_logger.os,'statvfs',return_value=(4096,4096,1,1,1)), \
+             patch('builtins.open') as opened:
+            with self.assertRaises(OSError):
+                self.session.export({},BenchDiagnostics(10000,50000,4),'ground_button')
+            opened.assert_not_called()
+        self.assertFalse(self.session.exported)
+        self.assertEqual(raw_record(self.session.buffer,0),before)
+
+    def test_real_start_refuses_low_reserve_and_resources_can_close(self):
+        pin=Mock()
+        pin.OUT=1
+        uart=types.SimpleNamespace(deinit=Mock())
+        led=Mock()
+        with patch.dict(sys.modules,{
+                'machine':types.SimpleNamespace(Pin=pin,UART=Mock(return_value=uart),I2C=Mock()),
+                'neopixel':types.SimpleNamespace(NeoPixel=Mock(return_value=led)),
+                'rp2':types.SimpleNamespace(bootsel_button=lambda:False)}), \
+             patch('receiver.Receiver',return_value=self.channel), \
+             patch.object(flight_logger,'MS5611',return_value=Mock()), \
+             patch.object(flight_logger.gc,'collect',side_effect=lambda:self.clock.sleep_ms(25)), \
+             patch.object(flight_logger.gc,'mem_free',return_value=64000,create=True):
+            with self.assertRaises(MemoryError): self.session.start({})
+        self.assertEqual(self.session.startup_gc_us,25000)
+        self.session.close()
+        self.channel.close.assert_called_once_with()
+        uart.deinit.assert_called_once_with()
+
+
+class LauncherTests(unittest.TestCase):
+    def tearDown(self):
+        flight_start._pending=None
+        flight_start._running=False
+
+    def test_bad_profile_rejected_without_allocating(self):
+        with patch.object(flight_start.cfg,'AUTO_START',False), \
+             patch('ram_buffer.RecordBuffer') as allocate:
+            with self.assertRaises(ValueError): flight_start.run('stabilize')
+            allocate.assert_not_called()
+
+    def test_pending_export_requires_verified_shutdown_and_keeps_failed_data(self):
+        buffer=RecordBuffer(632,144)
+        session=flight_logger.FlightSession(buffer,Clock())
+        session.count=1
+        flight_start._pending=session
+        with self.assertRaises(RuntimeError): flight_start.save_pending()
+        session.can_export=True
+        session.export_context=({},None,'ground_button')
+        with patch.object(session,'export',side_effect=OSError('storage')):
+            with self.assertRaises(OSError): flight_start.save_pending()
+        self.assertIs(flight_start._pending,session)
+        buffer.slot(0)
+        with patch.object(session,'export',return_value={'saved':True}):
+            self.assertEqual(flight_start.save_pending(),{'saved':True})
+        self.assertIsNone(flight_start._pending)
+        with self.assertRaises(RuntimeError): buffer.slot(0)
+
+    def test_launcher_restores_configuration_and_retains_failed_export(self):
+        import app
+        saved=(config.START_MODE,config.SAVE_LOG_ON_STOP,config.CONSOLE_HZ)
+        def run(session):
+            self.assertEqual(config.START_MODE,'manual')
+            self.assertFalse(config.SAVE_LOG_ON_STOP)
+            self.assertEqual(session.buffer.payload_bytes,91008)
+            session.count=rows
+            session.export_context=({},None,'ground_button')
+            raise OSError('failed export')
+        real_session=flight_logger.FlightSession
+        for rows in (0,1):
+            with self.subTest(rows=rows), patch.object(app,'run',side_effect=run), \
+                 patch.object(flight_logger,'FlightSession',side_effect=lambda b:real_session(b,Clock())):
+                with self.assertRaises(OSError): flight_start.run('manual')
+            self.assertEqual((config.START_MODE,config.SAVE_LOG_ON_STOP,config.CONSOLE_HZ),saved)
+            self.assertFalse(flight_start._running)
+            self.assertIsNotNone(flight_start._pending)
+            flight_start._pending.buffer.slot(0)
+            flight_start._pending=None
+
+
+if __name__ == '__main__':
+    unittest.main()

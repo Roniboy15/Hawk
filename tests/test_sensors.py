@@ -159,6 +159,28 @@ class GPSParsingTests(unittest.TestCase):
         self.assertAlmostEqual(data['speed_ms'], 11.5235555555)
         self.assertEqual(data['altitude_msl_m'], 545.4)
         self.assertTrue(data['course_usable'])
+        self.assertEqual(gps.counters['bytes'],len(stream))
+
+    def test_reusable_snapshot_clears_stale_and_no_fix_values(self):
+        gps=self.receiver()
+        scratch={}
+        gps.feed(GGA+RMC,0)
+        self.assertIs(gps.snapshot(100,scratch),scratch)
+        coherent=dict(scratch)
+        self.assertTrue(coherent['valid'])
+        self.assertIs(gps.snapshot(2600,scratch),scratch)
+        self.assertFalse(scratch['valid'])
+        for key in ('lat','lon','hdop','altitude_msl_m','speed_ms','course_deg'):
+            self.assertIsNone(scratch[key])
+        gps.feed(sentence('GNGGA,123520.00,,,,,0,00,99.99,,,,,,'),2700)
+        self.assertIs(gps.snapshot(2700,scratch),scratch)
+        self.assertFalse(scratch['valid'])
+        self.assertIsNone(scratch['lat'])
+        gps.feed(GGA+RMC,3000)
+        gps.snapshot(3010,scratch)
+        self.assertTrue(scratch['valid'])
+        self.assertEqual(scratch['gga_age_ms'],10)
+        self.assertEqual(coherent['gga_age_ms'],100)
 
     def test_no_fix_clears_previous_position_without_inventing_zero(self):
         gps = self.receiver()
@@ -191,6 +213,17 @@ class GPSParsingTests(unittest.TestCase):
         self.assertTrue(gps.snapshot(0)['valid'])
         with self.assertRaises(ValueError):
             checked_fields(RMC.replace(b'*', b'*00'))
+
+    def test_checksum_bytes_preserve_ascii_and_strict_hex_validation(self):
+        payload = 'GNTXT,' + ''.join(chr(n) for n in range(32, 127) if n != 42)
+        raw = sentence(payload)
+        self.assertEqual(','.join(checked_fields(raw)), payload)
+        for checksum in (b'G0', b'+1', b' 1', b'0', b'000', b'\xc3\xa9'):
+            with self.subTest(checksum=checksum), self.assertRaises(ValueError):
+                checked_fields(raw.split(b'*')[0] + b'*' + checksum)
+        for payload in ('GNTXT,\x1f', 'GNTXT,\x7f', 'GNTXT,\u00e9'):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                checked_fields(sentence(payload))
 
     def test_bad_coordinates_nan_and_non_metre_altitude_rejected(self):
         for payload in (

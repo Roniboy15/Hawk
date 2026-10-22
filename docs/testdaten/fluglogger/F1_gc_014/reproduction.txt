@@ -1,0 +1,16 @@
+gps_before, exit=1
+BEFORE
+qstr pool: n_pool=5, n_qstr=620, n_str_data_bytes=4321, n_total_bytes=11457
+FREE 131712
+Traceback (most recent call last):
+  File "/private/tmp/hawk-gps-repro/fragmented.py", line 21, in <module>
+  File "/private/tmp/hawk-gps-repro/gps_before.py", line 62, in checked_fields
+  File "/private/tmp/hawk-gps-repro/gps_before.py", line 62, in <genexpr>
+MemoryError: memory allocation failed, allocating 640 bytes
+
+gps_after, exit=0
+BEFORE
+qstr pool: n_pool=5, n_qstr=619, n_str_data_bytes=4314, n_total_bytes=11450
+FREE 132704
+PASS
+qstr pool: n_pool=5, n_qstr=619, n_str_data_bytes=4314, n_total_bytes=11450

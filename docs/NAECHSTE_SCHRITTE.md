@@ -65,12 +65,59 @@ Sensorchecks nicht und aendert nicht die akzeptierte MCU-Abhaengigkeit.
 
 ## 3. Jetzt konkret: Einbau und MANUAL-Logger
 
+**Aktualisierung nach e177cb5:** codex/manual-flight-logger ist aktiv. Besitzer
+waehlt CH3 unten/oben fuer Aufnahme aus/ein bei unveraendertem MANUAL, ohne
+festen Flugtimer. **L1/L2 sind ausgewertet:** CH3 unten 998/oben 1998 us,
+Dateien korrekt, Flash-Schreibzyklen aber bis 181.709 ms. Nicht direkt in den
+MANUAL-Loop integrieren. [Auswertung](testdaten/logger_boden/AUSWERTUNG_L1_L2.md).
+**L3 0.1.4 bestanden:** 91008 B/40 Bloecke und Imports passen, 68656 B frei.
+[Befund](testdaten/logger_boden/AUSWERTUNG_L3.md). Besitzer bestaetigt 1 Hz fuer
+erste MANUAL-Datenfluege und zugaenglichen BOOT. Loggerprototyp 0.1.0 ist
+implementiert und hostgeprueft. **Erster F1-Lauf ausgewertet:** CH3 zweimal
+aufnehmen/pausieren und BOOT-Export funktionieren, keine PWM. Es treten aber
+neun Schleifenabstaende >50 ms auf (max. 50.940 ms), TIMING ab 7.812 s.
+Das setzt die RC-Neutralfreigabe zurueck und ist vor F2 gezielt einzugrenzen.
+GPS-Nachrichten fehlerfrei, am Fenster kein Fix. 0.1.1-Diagnose ist ausgewertet:
+17 Trips, langsamste Periode 53.689 ms mit IMU/Lage 30.130 und GPS 16.347 ms.
+0.1.2 ist ausgewertet: sieben Trips in 90.734 s / max. 51.355 ms, Baro stabil.
+0.1.3 ist mit GPS-MemoryError/nie ausgefuehrter geplanter GC fehlgeschlagen.
+0.1.4 fuehrt GC aus, scheitert aber weiter am GPS-Speicherfehler. 0.1.5 entfernt
+die String-Internierung aus der NMEA-Pruefsumme; Fehler und Korrektur sind unter
+MicroPython/Unix reproduziert. **0.1.5-SENSOR-Lauf bestanden:** 137.227 s ohne
+GPS-Speicherfehler oder Timing-Trips, 105 Samples, BOOT-Export korrekt. GPS noch
+ohne Fix; maximal 49.500 ms ist knapp unter der Deadline. Jetzt F2 MANUAL am
+Tisch mit denselben Dateien, CH3 aus/an/aus/an und kleinen Steuerbewegungen.
+[Befund](testdaten/fluglogger/F1_gps_015/AUSWERTUNG.md). Keine neue Kalibrierung.
+**F2 inzwischen ausgewertet:** Aufnahme/Export funktionieren, Steuerkontinuitaet
+nicht bestanden. TIMING setzt alle Ruder fuer 5.129 s neutral. Logger 0.1.6
+aktiviert bestehende Phasenmessung auch MANUAL: app.py/config.py ersetzen,
+etwa drei Minuten am Tisch, ein Segment, nach Aussetzer sauber stoppen und
+JSON/CSV/Konsole unter F2_timing_016 sichern. Keine weitere Wiederholung 0.1.5.
+[F2-Ursache und Grenzen](testdaten/fluglogger/F2_manual_015/AUSWERTUNG.md).
+**0.1.6-Phasenlauf ist ausgewertet:** erneut Timing (53.154 ms), IMU/Lage
+30.284 ms und GPS8.964 ms in der langsamsten Iteration. Zudem IMU-Saettigung,
+obwohl Hawk laut Besitzer ruhig lag. 0.1.7 entlastet den IMU/Lagepfad und
+sichert einen ersten auffaelligen Rohsatz. Auch0.1.7 hat zwei Timing-Aussetzer:
+MANUAL541/2981 ms unterbrochen.0.1.8 prueft Heap alle20 statt200 ms, um
+automatischer Bereinigung zwischen den Pruefungen zuvorzukommen.
+**0.1.8-Bodenvergleich inzwischen bestanden:**288.274 s ohne Timing-Fault
+oder erneute RC-Sperre nach Freigabe, maximal45.709 ms.273 Samples und Export
+vollstaendig, GPS empfaengt, hat aber keinen Fix. Keine weitere Firmware-
+aenderung fuer diesen Befund. [Befund](testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md).
+**Jetzt Stand sichern**, dann MCU-Bordversorgung/bewussten Loggerstart ohne
+Mac vorbereiten. Danach GPS-Gruen und etwa10 min Aufnahme in zwei Segmenten
+gemeinsam am Boden pruefen; konkreter Ablauf im [Testdokument](FLUGLOGGER_TEST.md).
+[Diagnosebericht](testdaten/fluglogger/F1_timing/AUSWERTUNG.md).
+[F1-Befund/naechster Schritt](testdaten/fluglogger/F1_sensor/AUSWERTUNG.md),
+[Bedienfolge](FLUGLOGGER_TEST.md). F2 nicht unveraendert wiederholen. Kein neuer L3.
+Autostart und eigenstaendiger Bordstart sind noch nicht eingerichtet.
+
 Nach S1/S2/S3 bauen wir auf den bisherigen MANUAL-Durchgang auf. Der separate
 Sensorstarter steuert keine Ruder und ist daher noch kein MANUAL-Flugprogramm.
 Der konkrete [Einbau-/MANUAL-Arbeitsplan](EINBAU_UND_MANUAL_DATENFLUG.md) enthaelt
 Anschluesse, Versorgung, 180-Grad-IMU-Umbau und die naechsten Codeaufgaben.
-Nach Freigabe Sensorstand committen, dann codex/manual-flight-logger davon
-abzweigen. Aktive IMU-Zeichen bleiben bis zum mechanischen Umbau unveraendert.
+Sensorstand ist als e177cb5 gesichert, der Loggerbranch davon erstellt.
+Aktive IMU-Zeichen bleiben bis zum mechanischen Umbau unveraendert.
 
 Einbauentscheidung: Oberseite der IMU bleibt oben, X zeigt kuenftig nach hinten.
 Dann body_axes=(0,1,2), body_signs=(-1,-1,1) einstellen, neu waagerecht
@@ -86,18 +133,24 @@ MCU-Bordversorgung und USB-Pfad vorher klaeren, keine zwei 5-V-Quellen parallel.
   spaeteren Download keine ungeregelten Versorgungsquellen parallel verbinden.
 - IMU, RC, Servoausgaben, GPS, Barometer und Iterationszeiten auf gemeinsamer
   Zeitbasis aufzeichnen. Datenalter und Fehlerkontext mit speichern.
-- Ganze Fluege abdecken: Controller-Logs sind weiterhin begrenzte Ringe;
-  der neue volle Sensorpuffer hat noch keine IMU/RC/Servo-Daten. Gewuenschte
-  Flugdauer/Rate und Speicherweg festlegen. Ein erster Entwurf fuer kurze
-  Datenfluege kann ein gepackter RAM-Puffer fuer 5 min bei 1 Hz
-  sein, ergaenzt um Zeit-/Fehleraggregate jeder Iteration. RAM-Reserve auf dem
-  konkreten MCU pruefen; nicht automatisch eine Speicherkarte voraussetzen.
+- Ganze Fluege abdecken: bisherige Controller-Logs sind begrenzte Ringe;
+  der neue explizite Fluglogger hat IMU/RC/Servo/GPS/Baro im ganzen Aufnahme-Puffer.
+  Gewuenschte
+  Datenraten sind fuer die erste Version nun 1 Hz fuer alle Gruppen im RAM,
+  etwa zehn Minuten plus Ereignisse. 25/10/1 Hz bleibt eine spaetere Erweiterung
+  fuer schnelle Reaktionen mit geeignetem Speicherweg. Binaer im RAM speichern,
+  Zeit-/Fehleraggregate jeder Iteration erhalten.
+  CH3 schaltet Aufnahme, ohne Flugtimer. RAM-/Flashreserve auf dem konkreten MCU
+  pruefen; nicht automatisch eine Speicherkarte voraussetzen.
   Bei vollem Puffer nur Logging anhalten, MANUAL-Steuerung fortsetzen.
-  Boden-Stop/Export bei noch eingeschalteter Versorgung implementieren;
-  nicht per Timer die Steuerung waehrend eines Flugs beenden.
-  Das ist ein Implementierungsplan, noch keine vorhandene Funktion.
-  Flashzugriffe bleiben aus der
-  aktiven Regelschleife ausgeschlossen; Speicherloesung bewusst implementieren.
+  CH3-Aufnahmestop bei weiterlaufender Steuerung implementieren; fuer den
+  vorgeschlagenen RAM-Pfad erst nach Landung und bewusstem Programmstop
+  exportieren. Nicht per Timer die Steuerung waehrend eines Flugs beenden.
+  Der neue Prototyp implementiert dies explizit via flight_start; physischer
+  Nachweis fuer CH3/BOOT/Export liegt aus F1 vor; Timingdiagnose und F2 sind offen.
+  Bestehendes app.run() fuehrt weiter keine Flashzugriffe aus. Einen neuen
+  Speicherpfad erst nach vermessenen Schreibpausen und Gesamtlastvergleich
+  integrieren; kein ungemessener write() im Flug.
 - Verhalten der gesamten MANUAL-Integration zuerst am Boden pruefen, einschliesslich
   Mehrlast, fehlender Sensorwerte und sauberem Start/Stop. Sensorstoerung darf
   nicht aus Versehen die manuelle Steuerung durch einen blockierenden neuen
@@ -127,7 +180,7 @@ Naechste sinnvolle Diagnoseergaenzungen bei MANUAL-Integration:
 
 Vergleichsmessungen mit gleichen Einstellungen sichern; keine alten Fehlerdaten
 ersetzen. Drei 60-s-Laeufe sind ein sinnvoller Reproduzierbarkeitsvergleich,
-keine garantierte Worst-Case-Grenze. Die 131 Hosttests pruefen Logik, keine
+keine garantierte Worst-Case-Grenze. Die Hosttests pruefen Logik, keine
 realen Ausfuehrungszeiten. T4, Versorgung und Receiver-Failsafe bleiben offen;
 [Sicherungs-/Versorgungsbefunde](VERSORGUNG_WARNHINWEISE.md) weiter mitfuehren.
 
@@ -143,11 +196,8 @@ nicht vorab noetig. Einen fertigen Kreisregler gibt es im jetzigen Code nicht.
 
 ## Git fuer den laufenden Schritt
 
-Sensorabschluss auf codex/gps-baro-bringup und anschliessender neuer Branch
-wurden vom Besitzer am 2026-10-20 freigegeben.
-Er enthaelt Ergebnisse, UART-Korrektur und neuen hostgeprueften RAM-Puffer mit
-offenem Hardwarecheck. Abschluss committen und den neuen Branch
-codex/manual-flight-logger direkt davon erstellen. main ist noch sieben
-Commits hinter der aktuellen Branchbasis; nicht dort neu anfangen.
+Sensorabschluss e177cb5 auf codex/gps-baro-bringup und neuer Branch
+codex/manual-flight-logger sind erstellt. Aktuelle CH3-/Flash-Vorbereitung
+bleibt auf diesem Branch; noch kein neuer Commit dafuer.
 Push/PR und Merge nach main sind gesonderte Schritte; main muss den
 Loggerfortschritt nicht aufhalten. [Git-Ablauf](GIT.md).
