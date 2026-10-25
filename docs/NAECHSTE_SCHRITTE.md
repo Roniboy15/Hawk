@@ -7,8 +7,10 @@ schnelle IMU-Messungen; Steuerung/Logging laufen weiter. Kein Timing-Trip.
 [R3-Auswertung und naechster Schritt](testdaten/fluglogger/R3_response20_manual_gps/AUSWERTUNG.md):
 Stand committen, Einbau-/Modellchecks, danach kurzer MANUAL-Datenflug mit
 unveraenderten Gains. Kein weiterer identischer GPS-Bodenlauf erforderlich.
-Branch bleibt `codex/response-logger-20hz`;0.1.9 ist auf
-`codex/manual-flight-logger` gesichert,1 Hz auch im neuen Code waehlbar.
+0.2.0/R1..R3 sind als0c1e3ba auf `codex/response-logger-20hz` gesichert.
+Weiter auf dem direkt davon erstellten `codex/manual-flight-tests-20hz`:
+[konkrete Flugvorbereitung und Rudermessung](ERSTER_MANUAL_DATENFLUG.md).
+0.1.9 bleibt auf `codex/manual-flight-logger`,1 Hz auch im neuen Code waehlbar.
 
 Besitzerentscheidung vom 2026-10-18: pragmatisch zur nutzbaren Flugfunktion
 weiterarbeiten. GPS/Barometer und manuelle Messfluege werden vorbereitet;

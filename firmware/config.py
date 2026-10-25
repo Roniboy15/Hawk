@@ -57,6 +57,9 @@ RX_TIMEOUT_MS = 100
 NEUTRAL_WINDOW = 0.08
 NEUTRAL_FRAMES = 25
 
+# limit ist Pulsweg in us je Seite, auch in MANUAL: z.B.150 ->1350..1650 us.
+# Ruderausschlag in mm am Modell messen; keinen universellen Servo-Endpunkt
+# aus1000/2000 us ableiten. Flugvorbereitung: docs/ERSTER_MANUAL_DATENFLUG.md.
 SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 200},
           'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150},
           'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150}}

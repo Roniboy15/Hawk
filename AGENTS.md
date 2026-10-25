@@ -490,6 +490,17 @@ safe replacement limits or exact airframe recommendations yet; do not infer
 mechanical clearance from pulse conventions. Keep tested firmware unchanged
 for this checkpoint; flight preparation belongs on the new branch.
 
+Checkpoint0c1e3ba created on codex/response-logger-20hz; now continue on
+codex/manual-flight-tests-20hz directly from it. Owner identifies airframe
+as Dream-Flight Libelle, previously flown successfully with direct receiver
+outputs; old PWM/throw values unknown. Official linked2014 manual printedp17
+lists Low/High throws: elevator11/14 mm each way, rudder20/25 mm, aileron12/18 mm.
+Do not convert these into guessed pulse limits; measure linkage/surface travel.
+Current150-us pitch/yaw limits unchanged; config comment only. No new logger
+runtime code needed. docs/ERSTER_MANUAL_DATENFLUG.md gives measurement sheet
+and first MANUAL flight workflow. Preserve AUTO_START=False/LOGGER_BOOT_MODE=None
+in repository; board setting manual is explicit operator choice. No push/merge.
+
 Keep changes small and preserve the separation of pure mathematics, hardware
 adapters and application orchestration. Describe coordinates, signs and units.
 Keep pins, gains and limits in `firmware/config.py`.

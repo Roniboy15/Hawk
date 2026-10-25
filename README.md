@@ -38,8 +38,10 @@ Nur RAM im Flug; Flash im Steuerloop blockierte in L2 bis181.709 ms.
 Repository-Defaults. Fuer den bewussten MANUAL-Bordstart am Board
 `LOGGER_BOOT_MODE='manual'` waehlen, nicht AUTO_START=True.
 [Loggerprofile/Bedienung](docs/LOGGER_20HZ.md), [Bordstart und USB/BEC](docs/BORDSTART_LOGGER.md).
-Jetzt getesteten Stand sichern, Einbau und Ruderausschlaege am Modell pruefen,
-danach kurzen MANUAL-Datenflug vorbereiten. [Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
+Getesteter Stand:0c1e3ba. Weiter auf `codex/manual-flight-tests-20hz` fuer
+Einbau/Ruderwege und kurzen MANUAL-Datenflug. Besitzer nennt als Modell die
+Dream-Flight Libelle. [Konkrete Flugvorbereitung](docs/ERSTER_MANUAL_DATENFLUG.md),
+[Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
 [SENSOREN_TEST.md](docs/SENSOREN_TEST.md) bleibt die Anleitung fuer Wiederholungen.
 sensor_test.run('baro'/'gps'/'both') startet nur den separaten Funktionstest,
 ohne Servo-PWM. Der gemeinsame Logger ist in SENSOR und MANUAL am Boden geprueft;
@@ -54,8 +56,8 @@ T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
 herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
 T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
 Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert,
-Sensorabschluss als e177cb5 auf codex/gps-baro-bringup. Aktueller Branch ist
-codex/manual-flight-logger. Barometer/S1 ist funktional bestaetigt;
+Sensorabschluss als e177cb5 auf codex/gps-baro-bringup. Die anschliessende
+1-Hz-Loggerarbeit liegt auf codex/manual-flight-logger. Barometer/S1 ist funktional bestaetigt;
 GPS-Wiederholung gps_2 samt Konsole bestaetigt Fix und Bewegungsreaktion (S2).
 S3 bestaetigt gemeinsamen Betrieb und sauberen Stop. Sein alter Dateistand
 enthaelt nur die letzten 40.963 s; der neue 0.2.0-RAM-Puffer ist hostgeprueft,

@@ -1,5 +1,17 @@
 # Git fuer den aktuellen Hawk-Stand
 
+Update2026-10-25: Logger0.2.0 samt R1..R3 wurde als **0c1e3ba** auf
+`codex/response-logger-20hz` gesichert. Der Besitzer hat direkt davon den
+neuen Branch **codex/manual-flight-tests-20hz** fuer20-Hz-MANUAL-Datenfluege
+beauftragt; er ist jetzt aktiv. main bleibt unveraendert, kein Push/Merge.
+Flugsetup und neue Messfluege hier in eigenen Commits sichern, insbesondere
+Ruderweg-Aenderungen getrennt vom geprueften Loggercheckpoint.
+Nach Fluegen kann dieser Branch geprueft nach main integriert werden; er
+enthaelt auch die vorherigen Sensor-/Loggerarbeiten. Merge kombiniert die
+Historie; zum Verwenden eines aelteren Standes Branch wechseln und passende
+Firmware auf den MCU uebertragen. Git allein aendert das Board nicht.
+Die folgende Beschreibung ist der historische Sensor-/Logger-Uebergang.
+
 Sensorabschluss und anschliessender Branchwechsel wurden am 2026-10-20 vom
 Besitzer freigegeben. Die folgende Bestandsaufnahme beschreibt den Ausgangsstand
 vor diesem Abschlusscommit.
