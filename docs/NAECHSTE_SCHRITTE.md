@@ -1,5 +1,15 @@
 # Aktueller Weg: Sensoren pruefen, manuell Daten sammeln, neu bewerten
 
+Update2026-10-25: R1/R2 und nun R3 mit GPS-/BOOT-Betrieb im20-Hz-Profil
+funktional bestanden, einschliesslich Vollpuffer und MANUAL-Kontinuitaet.
+R3 hat IMU-Saettigung bei berichteter kraeftiger Bewegung, neun ungueltige
+schnelle IMU-Messungen; Steuerung/Logging laufen weiter. Kein Timing-Trip.
+[R3-Auswertung und naechster Schritt](testdaten/fluglogger/R3_response20_manual_gps/AUSWERTUNG.md):
+Stand committen, Einbau-/Modellchecks, danach kurzer MANUAL-Datenflug mit
+unveraenderten Gains. Kein weiterer identischer GPS-Bodenlauf erforderlich.
+Branch bleibt `codex/response-logger-20hz`;0.1.9 ist auf
+`codex/manual-flight-logger` gesichert,1 Hz auch im neuen Code waehlbar.
+
 Besitzerentscheidung vom 2026-10-18: pragmatisch zur nutzbaren Flugfunktion
 weiterarbeiten. GPS/Barometer und manuelle Messfluege werden vorbereitet;
 Timingverbesserung bleibt Arbeit, exakt 100 Hz ist keine pauschale Sperre fuer

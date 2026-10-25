@@ -1,5 +1,14 @@
 # Einbau und erster MANUAL-Datenflug: konkreter Arbeitsplan
 
+Update2026-10-25: Logger0.2.0 auf `codex/response-logger-20hz` hat R1/R2/R3
+mit1800 schnellen Zeilen, GPS-Fix und BOOT-Start funktional bestanden.
+IMU-Saettigung unter berichteter kraeftiger Bewegung wurde markiert, MANUAL
+lief weiter; [R3-Auswertung](testdaten/fluglogger/R3_response20_manual_gps/AUSWERTUNG.md).
+Jetzt Einbau-/Modellchecks unten abschliessen und kurzen MANUAL-Datenflug
+vorbereiten. Fuer die geplanten kurzen Fluege gilt etwa90 s Aufnahme im
+Profil response20; zehn Minuten sind ein separates Langzeitprofil. Der
+folgende aeltere1-Hz-Plan beschreibt nicht mehr den aktuellen Loggerstand.
+
 Aktualisiert 2026-10-22. S1/S2/S3 sind funktional bestanden; siehe
 [S3-Auswertung](testdaten/S3_gps_and_baro/AUSWERTUNG.md).
 L3-RAM-Vorprobe ist inzwischen bestanden. Ein expliziter MANUAL-Loggerprototyp

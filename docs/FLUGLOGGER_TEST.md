@@ -1,5 +1,12 @@
 # Gemeinsamer MANUAL-Logger: 0.1.9 mit Bordstart und GPS getestet
 
+**Aktueller Entwicklungsbranch:** `codex/response-logger-20hz` fuegt in0.2.0
+ein waehlbares schnelles Profil hinzu. R1/R2/R3 funktional bestanden, inklusive
+Vollpuffer, GPS-Fixlast und BOOT-Start. IMU-Messbereich bei kraeftiger Bewegung
+erreicht, MANUAL bleibt aktiv. Siehe [20-Hz-Ergebnisse](LOGGER_20HZ.md).
+Die folgende0.1.9-Anleitung dokumentiert
+die Basis; der Zehn-Minuten-Lauf gehoert zum Profil `snapshot1`.
+
 **Aktueller Befund:** B1 zweimal sowie SENSOR/MANUAL draussen mit GPS-Fix
 funktional bestanden. Alle Laeufe ohne Fault/Timing-Trip, mit BOOT-Start und
 sauberem Export. MANUAL nach Startfreigabe ohne erneute RC-Sperre, maximal

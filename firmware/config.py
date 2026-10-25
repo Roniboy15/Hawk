@@ -16,6 +16,9 @@ AUTO_START = False
 # Bewusster Logger-Bordstart: None = aus; 'sensor'/'manual' wartet auf BOOT.
 # AUTO_START bleibt False. Fuer den ersten BEC-Test 'sensor' waehlen.
 LOGGER_BOOT_MODE = None
+# Vor dem Start waehlen: 'snapshot1' fuer lange Laeufe, 'response20' fuer
+# kurze Reaktionstests. Betrifft nur Aufnahme, keine Steuerungsfrequenz.
+LOGGER_PROFILE = 'response20'
 # Besitzer meldet am 2026-10-13 alle Achsentests bestanden. Gespeicherter Stand
 # startet zur erneuten Sichtpruefung ohne PWM; STABILIZE bewusst am Tisch waehlen.
 START_MODE = 'sensor'              # sensor / manual / stabilize
@@ -112,9 +115,9 @@ LOGGER_BENCH = {'version': '0.1.4', 'channel_pin': RECORDING_CHANNEL['pin'], 'po
                 'ram_records_per_block': 16}
 
 # Explizit via flight_start oder BOOT-Freigabe mit LOGGER_BOOT_MODE.
-# Besitzerwahl: 1-Hz-Basisdaten, CH3 Start/Pause, BOOT nach Landung zum Export.
+# Volle 1-Hz-Basisdaten in beiden Profilen; CH3 Start/Pause, BOOT Bodenexport.
 # 632 Records sind Kapazitaet, kein Timer; Ereignisse verbrauchen ebenfalls Slots.
-FLIGHT_LOGGER = {'version': '0.1.9', 'capacity': 632, 'record_bytes': 144,
+FLIGHT_LOGGER = {'version': '0.2.0', 'capacity': 632, 'record_bytes': 144,
                  'records_per_block': 16, 'sample_ms': 1000,
                  'reserve_bytes': 65536, 'flash_reserve_bytes': 131072,
                  # Start-GC ca. 24 ms: Bereinigung nach kurzen Iterationen planen,
@@ -127,3 +130,8 @@ FLIGHT_LOGGER = {'version': '0.1.9', 'capacity': 632, 'record_bytes': 144,
                  'led_pin': 16, 'led_brightness': 12,
                  'gps_ready_epochs': 5, 'gps_min_satellites': 6,
                  'gps_max_hdop': 2.5}
+
+# 90 s * 20 Hz; dazu 132 volle Snapshots/Ereignisse. 83808 B Nutzdaten,
+# weniger als bisher 91008 B: Platz fuer Zusatzcode, gleiche 64-KiB-Startreserve.
+RESPONSE_LOGGER = {'capacity': 1800, 'record_bytes': 36, 'records_per_block': 48,
+                   'sample_ms': 50, 'snapshot_capacity': 132}

@@ -73,5 +73,16 @@ logger_ram_*.json
 !docs/testdaten/fluglogger/F3_gps_dauer_sensor_019/flight_242896_0.csv
 !docs/testdaten/fluglogger/F3_gps_dauer_manual_019/flight_284513_0.json
 !docs/testdaten/fluglogger/F3_gps_dauer_manual_019/flight_284513_0.csv
+# 0.2.0: ausgewaehlte SENSOR-/MANUAL-Nachweise mit schnellem Datenstrom.
+!docs/testdaten/fluglogger/R1_response20/flight_202103_0.json
+!docs/testdaten/fluglogger/R1_response20/flight_202103_0.csv
+!docs/testdaten/fluglogger/R1_response20/flight_202103_0_response.csv
+!docs/testdaten/fluglogger/R2_response20_manual/flight_610069_0.json
+!docs/testdaten/fluglogger/R2_response20_manual/flight_610069_0.csv
+!docs/testdaten/fluglogger/R2_response20_manual/flight_610069_0_response.csv
+# 0.2.0 R3: BOOT-/GPS-Fixbetrieb und IMU-Messbereich unter Bewegung.
+!docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0.json
+!docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0.csv
+!docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0_response.csv
 .venv/
 .thonny/

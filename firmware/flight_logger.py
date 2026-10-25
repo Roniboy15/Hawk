@@ -16,9 +16,13 @@ from flight_records import RECORD_BYTES, FORMAT, COLUMNS, GroundStop, encode, cs
 
 
 class FlightSession:
-    def __init__(self, buffer, clock=time):
+    def __init__(self, buffer, clock=time, response=None):
         self.buffer, self.clock = buffer, clock
+        self.response = response
         self.settings = dict(cfg.FLIGHT_LOGGER)
+        self.settings['profile'] = 'response20' if response is not None else 'snapshot1'
+        if response is not None:
+            self.settings['capacity'] = cfg.RESPONSE_LOGGER['snapshot_capacity']
         self.start_method = 'explicit'
         s = self.settings
         if s['record_bytes'] != RECORD_BYTES or buffer.record_bytes != RECORD_BYTES:
@@ -131,7 +135,8 @@ class FlightSession:
                                   cfg.MAX_LOOP_US-self.startup_gc_us-5000))
         self.gc_check_ms = self.clock.ticks_ms()
         self.color((12, 0, 0))
-        print('Fluglogger', self.settings['version'], ': 1 Hz, CH3 unten/oben Pause/Aufnahme.')
+        print('Fluglogger', self.settings['version'], self.settings['profile'],
+              ': CH3 unten/oben Pause/Aufnahme.')
         print('Nach Landung CH3 unten, BOOT 2 s halten; erst nach Speichermeldung ausschalten.')
         print('RAM nach echten Objekten frei:', self.free_after_init)
 
@@ -206,7 +211,7 @@ class FlightSession:
     def _append(self, kind, now, control, g, b, ch3, ready):
         if self.full or self.disabled:
             return
-        if self.count == self.buffer.capacity-1:
+        if self.count == self.buffer.capacity-1 or kind == 5:
             kind = 5  # Letzten Slot fuer eindeutiges FULL-Ereignis reservieren.
             self.full, self.recording = True, False
         encode(self.buffer, self.count, self.clock.ticks_diff(now, self.started),
@@ -302,6 +307,12 @@ class FlightSession:
                 self.clock.ticks_diff(now, self.last_sample_ms) >= self.settings['sample_ms']):
             self._append(1, now, control, g, b, ch3, ready)
             self.last_sample_ms = now
+        if self.recording and self.response is not None:
+            self.response.sample(self.clock.ticks_diff(now, self.started), self.segment, control)
+            if self.response.count == self.response.buffer.capacity:
+                g, b = self._snapshots(now)
+                control['work_to_log_us'] = self.clock.ticks_diff(self.clock.ticks_us(), control['iteration_start_us'])
+                self._append(5, now, control, g, b, ch3, ready)
         self.last_state = state
         level = self.settings['led_brightness']
         blink_on = not self.recording or (now//250) % 2 == 0
@@ -339,13 +350,14 @@ class FlightSession:
         fs = os.statvfs('.')
         free = (fs[1] or fs[0])*min(fs[3], fs[4])
         # Konservativer Text-/JSON-Platzbedarf plus Dateisystemreserve.
-        if free < self.count*1024+131072+self.settings['flash_reserve_bytes']:
+        fast_bytes = self.response.count*384 if self.response is not None else 0
+        if free < self.count*1024+fast_bytes+131072+self.settings['flash_reserve_bytes']:
             self.color((self.settings['led_brightness'], 0, 0))
             raise OSError('Zu wenig Flash fuer Export plus Reserve; RAM nicht ausschalten')
         for index in range(10000):
             stem = 'flight_%d_%d' % (self.clock.ticks_ms(), index)
             occupied = False
-            for suffix in ('.csv', '.json'):
+            for suffix in ('.csv', '.json', '_response.csv'):
                 try:
                     os.stat(stem+suffix)
                     occupied = True
@@ -357,7 +369,7 @@ class FlightSession:
         else:
             raise OSError('Keine freie Fluglog-Dateinummer')
         report = dict(metadata)
-        report.update(schema=1, logger_version=self.settings['version'],
+        report.update(schema=2 if self.response is not None else 1, logger_version=self.settings['version'],
                       start_method=self.start_method,
                       logger_configuration=self.settings, recording_channel=dict(cfg.RECORDING_CHANNEL),
                       gps_configuration=dict(cfg.GPS), barometer_configuration=dict(cfg.BAROMETER),
@@ -382,16 +394,22 @@ class FlightSession:
                       gps_counters=dict(self.gps.counters) if self.gps else {},
                       barometer_prom=self.baro.prom if self.baro else None)
         report['stage_timing'] = self.stage_timing.report() if self.stage_timing is not None else None
+        if self.response is not None:
+            report['response_log'] = self.response.report(stem+'_response.csv')
         with open(stem+'.csv', 'w') as file:
             file.write(COLUMNS+'\n')
             for index in range(self.count):
                 file.write(csv_row(self.buffer, index))
+        if self.response is not None:
+            self.response.export(stem+'_response.csv')
         with open(stem+'.json', 'w') as file:
             json.dump(report, file)
         if hasattr(os, 'sync'):
             os.sync()
         self.color((0, self.settings['led_brightness'], self.settings['led_brightness']))
         print('Flugdaten gespeichert:', stem+'.csv')
+        if self.response is not None:
+            print('20-Hz-Reaktionsdaten gespeichert:', stem+'_response.csv')
         print('Flugbericht gespeichert:', stem+'.json', '- jetzt Versorgung abschalten.')
         self.exported = True
         return report

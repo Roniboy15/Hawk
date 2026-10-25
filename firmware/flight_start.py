@@ -45,19 +45,28 @@ def run(profile='sensor', wait_for_button=False):
         raise RuntimeError('Fluglogger laeuft bereits')
     if _pending is not None:
         raise RuntimeError('Ungesicherte Daten im RAM: erst save_pending(), kein Neustart')
+    if cfg.LOGGER_PROFILE not in ('snapshot1', 'response20'):
+        raise ValueError('Loggerprofil muss snapshot1 oder response20 sein')
     _running = True
-    buffer = None
+    buffer = fast_buffer = None
     session = None
     saved = (cfg.START_MODE, cfg.SAVE_LOG_ON_STOP, cfg.CONSOLE_HZ)
     try:
         from ram_buffer import RecordBuffer
         settings = cfg.FLIGHT_LOGGER
-        buffer = RecordBuffer(settings['capacity'], settings['record_bytes'],
-                              settings['records_per_block'])
+        fast = cfg.RESPONSE_LOGGER if cfg.LOGGER_PROFILE == 'response20' else None
+        capacity = fast['snapshot_capacity'] if fast else settings['capacity']
+        buffer = RecordBuffer(capacity, settings['record_bytes'], settings['records_per_block'])
+        if fast:
+            fast_buffer = RecordBuffer(fast['capacity'], fast['record_bytes'], fast['records_per_block'])
         # Erst nach Pufferreservierung Code laden, keine Hardware in diesen Imports.
         from flight_logger import FlightSession
         import app
-        session = FlightSession(buffer)
+        if fast:
+            from response_log import ResponseLog
+            session = FlightSession(buffer, response=ResponseLog(fast_buffer))
+        else:
+            session = FlightSession(buffer)
         if wait_for_button:
             _wait_for_start()
             session.start_method = 'boot_button'
@@ -72,6 +81,8 @@ def run(profile='sensor', wait_for_button=False):
             _pending = session
         elif buffer is not None:
             buffer.release()
+            if fast_buffer is not None:
+                fast_buffer.release()
         _running = False
 
 
@@ -84,5 +95,7 @@ def save_pending():
         raise RuntimeError('Abschaltung unbestaetigt; kein Flash-Export erlaubt')
     report = _pending.export(*_pending.export_context)
     _pending.buffer.release()
+    if _pending.response is not None:
+        _pending.response.buffer.release()
     _pending = None
     return report

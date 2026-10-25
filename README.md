@@ -20,27 +20,26 @@ Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ablei
 
 ## Start hier
 
-**Aktueller Schritt:** S1/S2/S3 und L3-RAM-Vorprobe sind bestanden. Logger0.1.8
-hat den gezielten MANUAL-Bodenvergleich ueber4 min48 s ohne Timing-Fault oder
-erneute RC-Sperre nach Freigabe bestanden;273 Samples vollstaendig gespeichert.
-GPS empfaengt fehlerfrei, hatte in diesem Lauf aber keinen Fix.0.1.8 ist als
-8b9adde gesichert.0.1.9 ergaenzt auf demselben Branch einen optionalen BOOT-
-Bordstart ohne Mac. B1 und kurze SENSOR-/MANUAL-Aussenlaeufe mit GPS-Fix sind
-inzwischen bestanden, ohne Fault/erneuten RC-Ausfall. Nur der etwa10-min-
-Aufnahmelauf in zwei Segmenten im endgueltigen Einbau bleibt als naechster Test.
-[0.1.9-Auswertung](docs/testdaten/fluglogger/AUSWERTUNG_019.md),
-[F2-Auswertung](docs/testdaten/fluglogger/F2_gc_018/AUSWERTUNG.md),
-[Bedienung des Loggers](docs/FLUGLOGGER_TEST.md).
-CH3 unten/oben schaltet Aufnahme aus/ein, ohne festen Flugtimer und ohne
-den MANUAL-Durchgang zu beenden. L1/L2 sind ausgewertet: CH3 998..1998 us,
-Dateien korrekt, Flash aber bis 181.709 ms blockierend. L3 0.1.4 bestaetigt
-fruehe Pufferreservierung: 91008 B in 40 Bloecken, nach Imports 68656 B frei.
-Besitzer waehlt 1 Hz und BOOT fuer Bodenstop. Neuer expliziter Logger ist
-hostgeprueft: CH3 Start/Pause, GPS-LED, BOOT 2 s nach Landung und Export erst
-nach PWM/PIO/UART-Stop. Keine Wiederholung von L3, kein Autostart eingeschaltet.
-[L1/L2-Ergebnis](docs/testdaten/logger_boden/AUSWERTUNG_L1_L2.md).
-[L3-Ergebnis und Aenderung](docs/testdaten/logger_boden/AUSWERTUNG_L3.md).
-[Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
+**Aktueller Schritt:** Logger0.2.0 auf `codex/response-logger-20hz` hat
+R1/R2/R3 am Boden bestanden:20-Hz-Reaktionsdaten plus volle1-Hz-Snapshots,
+GPS-Fix, BOOT-Bordstart, CH3-Pause und geordneter Export. R3 speichert1800
+schnelle Zeilen (rund90 s), ohne Timing-Trip oder erneute RC-Sperre nach
+Startfreigabe. Kraeftige Bewegung erreicht den IMU-Messbereich: neun schnelle
+IMU-Datensaetze sind korrekt ungueltig, IMU_RUNTIME bleibt markiert, MANUAL
+laeuft weiter. Kein Nachweis von Flugstabilitaet oder abgestimmten Gains.
+225 Hosttests bestehen. [R3-Auswertung](docs/testdaten/fluglogger/R3_response20_manual_gps/AUSWERTUNG.md).
+
+`LOGGER_PROFILE='response20'` waehlt diese kurze Aufnahme, `'snapshot1'`
+weiterhin den1-Hz-Langzeitlogger. CH3 unten/oben pausiert/startet beide
+Datenstroeme ohne Flugtimer; voller Puffer beendet nur Aufnahme. Nach Landung
+CH3 unten, BOOT2 s, Tuerkis/alle Speichermeldungen abwarten, dann abschalten.
+Nur RAM im Flug; Flash im Steuerloop blockierte in L2 bis181.709 ms.
+`AUTO_START=False`, `START_MODE='sensor'`, `LOGGER_BOOT_MODE=None` bleiben
+Repository-Defaults. Fuer den bewussten MANUAL-Bordstart am Board
+`LOGGER_BOOT_MODE='manual'` waehlen, nicht AUTO_START=True.
+[Loggerprofile/Bedienung](docs/LOGGER_20HZ.md), [Bordstart und USB/BEC](docs/BORDSTART_LOGGER.md).
+Jetzt getesteten Stand sichern, Einbau und Ruderausschlaege am Modell pruefen,
+danach kurzen MANUAL-Datenflug vorbereiten. [Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
 [SENSOREN_TEST.md](docs/SENSOREN_TEST.md) bleibt die Anleitung fuer Wiederholungen.
 sensor_test.run('baro'/'gps'/'both') startet nur den separaten Funktionstest,
 ohne Servo-PWM. Der gemeinsame Logger ist in SENSOR und MANUAL am Boden geprueft;

@@ -442,6 +442,54 @@ then reassess first MANUAL data flight. Owner now explicitly authorizes the
 
 ## Working boundaries
 
+Owner request2026-10-25: implement compact20-Hz response logging on
+codex/response-logger-20hz, branched from8f6ed38. Logger0.2.0 adds optional
+response_log.py; LOGGER_PROFILE=response20 or snapshot1. Both buffers reserved
+before large imports;1800*36+132*144=83808 B in response20, unchanged64-KiB
+start reserve. Angles0.01deg, gyro/RX/command20Hz target; full snapshots1Hz.
+CH3 pauses both, capacity stops logging only, export both CSVs after hardware
+stop. Timestamps are logger-entry times, not sensor/servo capture measurements.
+Keep AUTO_START=False,
+LOGGER_BOOT_MODE=None and all pins/gains/signs/guards unchanged.
+
+0.2.0 board results2026-10-25: R1 SENSOR55.215 s/608 fast samples; R2 MANUAL
+210.197 s/1800 fast samples, three segments totalling89.987 s capture and FULL.
+All six files reconciled; no faults/trips/errors, clean ground_button export,
+5679 MANUAL axis commands match calibration/source. After597-ms enable no
+RC rearm; control continues25.923 s after FULL. Owner reports no felt control
+irregularities. Fast intervals12..92/13..93 ms, mean50.025/50.014 ms; zero
+missed raster slots, not uniform sampling. Startup free65616/65632 B exceeds
+65536 by only80/96 B; do not lower reserve or assume more code fits.
+Both runs explicit start and NO GPS fix/used satellites, despite clean NMEA.
+No full-fix20-Hz or0.2.0 boot_button validation yet. Next one combined outdoor
+MANUAL/BOOT run with GPS-ready and60..90 s capture in intended installation,
+then assess first MANUAL data flight. No firmware fix indicated by these logs.
+See docs/testdaten/fluglogger/AUSWERTUNG_020.md; preserve raw files.
+
+R3 result2026-10-25 supersedes that open GPS/boot item: boot_button MANUAL,
+250.492 s, two capture segments totalling89.978 s,1800 fast rows/93 full rows,
+19.996 Hz, zero missed raster slots, no timing trips/rearm after560-ms enable.
+All93 full rows GPS-fix/ready (6..12 sats,HDOP0.93..1.69,age<=1072 ms), no GPS
+errors/poll gaps.5679 axis commands match source/calibration; clean FULL/BOOT
+export,66624 B startup free. NOT fault-free: IMU_RUNTIME at211.294 s app time;
+first raw(-10350,5302,32767,-1727,3133,-11169,5340) clips acc-Z in configured
+2g range. Nine fast rows IMU-invalid/blank, manual RX/PWM remain valid; fault
+latches while later IMU samples recover. CSV origin is78 ms before app origin.
+Owner reports frequent vigorous movement, exact fault moment uncertain; motion
+is plausible, not proven cause. Keep limits/gains unchanged; review IMU range
+before stabilization/navigation. No logger fix indicated. Next secure commit,
+finish installation/model checks, short MANUAL data flight; no identical GPS
+ground repeat required. See R3_response20_manual_gps/AUSWERTUNG.md. No commit
+authorization inferred from the test report; preserve all raw files.
+
+Owner approval2026-10-25: commit the0.2.0 implementation plus R1..R3 evidence,
+then branch directly from that checkpoint for20-Hz MANUAL flight-test work.
+Owner asks to assess limited elevator/rudder travel before flight. Current
+SERVOS limits are roll200 us, pitch/yaw150 us, used in MANUAL too. No measured
+safe replacement limits or exact airframe recommendations yet; do not infer
+mechanical clearance from pulse conventions. Keep tested firmware unchanged
+for this checkpoint; flight preparation belongs on the new branch.
+
 Keep changes small and preserve the separation of pure mathematics, hardware
 adapters and application orchestration. Describe coordinates, signs and units.
 Keep pins, gains and limits in `firmware/config.py`.

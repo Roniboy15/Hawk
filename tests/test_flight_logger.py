@@ -19,6 +19,7 @@ import flight_logger
 import flight_start
 from diagnostics import BenchDiagnostics, StageTiming
 from ram_buffer import RecordBuffer
+from response_log import ResponseLog
 
 MOD = 1 << 30
 
@@ -416,6 +417,12 @@ class SessionTests(unittest.TestCase):
 
 
 class LauncherTests(unittest.TestCase):
+    def setUp(self):
+        # Die bisherigen Launcher-Vertraege weiterhin im 1-Hz-Profil pruefen.
+        setting=patch.object(config,'LOGGER_PROFILE','snapshot1')
+        setting.start()
+        self.addCleanup(setting.stop)
+
     def tearDown(self):
         flight_start._pending=None
         flight_start._running=False
@@ -543,6 +550,158 @@ class LauncherTests(unittest.TestCase):
             self.assertFalse(flight_start._running)
             self.assertIsNotNone(flight_start._pending)
             flight_start._pending.buffer.slot(0)
+            flight_start._pending=None
+
+
+class ResponseTests(SessionTests):
+    # Gemeinsame CH3-/GC-/Fehlervertraege auch mit schnellem Puffer ausfuehren.
+    def setUp(self):
+        super().setUp()
+        self.session=flight_logger.FlightSession(RecordBuffer(132,144),self.clock,
+                response=ResponseLog(RecordBuffer(1800,36,48)))
+        self.session.started=0
+        self.session.aux=self.channel
+        self.session.button=lambda:False
+
+    def test_capacity_stops_only_recording_keeps_all_earlier_rows(self):
+        self.start_capture()
+        first=raw_record(self.session.buffer,0)
+        with patch('builtins.open',side_effect=AssertionError('Flash im Loop')):
+            for ms in range(550,100000,50):
+                self.assertFalse(self.step(ms))
+        fast=self.session.response
+        self.assertEqual(fast.count,1800)
+        self.assertTrue(self.session.full)
+        self.assertFalse(self.session.recording)
+        self.assertEqual(raw_record(self.session.buffer,0),first)
+        self.assertEqual(records.decode(self.session.buffer,self.session.count-1)[3],5)
+        self.assertEqual(fast.report('test.csv')['interval_mean_ms'],50)
+        self.assertEqual(fast.missed,0)
+        self.assertEqual(fast.buffer.payload_bytes+self.session.buffer.payload_bytes,83808)
+
+    def test_20hz_deadlines_do_not_drift_or_fabricate_catchup_samples(self):
+        self.start_capture()  # erster schneller Wert bei 500 ms
+        for ms in (521,563,584,605,750,771,813):
+            self.step(ms)
+        fast=self.session.response
+        self.assertEqual(fast.count,5)  # 500,563,605,750,813; kein Nachholen bei750
+        self.assertEqual(fast.missed,2)
+        self.assertEqual(fast.interval_min,42)
+        self.assertEqual(fast.interval_max,145)
+        # Pausen duerfen weder den Puffer fuellen noch als Auslassungen zaehlen.
+        self.step(820,998)
+        self.step(1020)
+        count,missed=fast.count,fast.missed
+        self.step(10000)
+        self.assertEqual(fast.count,count)
+        self.step(11000,1998)
+        self.step(11200)
+        self.assertEqual(fast.count,count+1)
+        self.assertEqual(fast.missed,missed)
+
+    def test_export_both_streams_roundtrip_flags_and_preserve_existing_files(self):
+        self.start_capture()
+        c=control()
+        c.update(mode='MANUAL_FALLBACK',fault='IMU_RUNTIME',imu_fresh=False,period_us=80000)
+        self.session.response.sample(550,1,c)
+        self.session.can_export=True
+        with tempfile.TemporaryDirectory() as folder:
+            previous=os.getcwd()
+            try:
+                os.chdir(folder)
+                Path('flight_500_0_response.csv').write_text('old evidence')
+                with contextlib.redirect_stdout(io.StringIO()), \
+                     patch.object(flight_logger.os,'statvfs',return_value=(4096,4096,1024,512,512)):
+                    report=self.session.export({},BenchDiagnostics(10000,50000,4),'ground_button')
+                self.assertEqual(Path('flight_500_0_response.csv').read_text(),'old evidence')
+                self.assertEqual(report['schema'],2)
+                self.assertEqual(report['logger_configuration']['profile'],'response20')
+                self.assertEqual(report['response_log']['samples'],2)
+                rows=list(csv.DictReader(io.StringIO(Path(report['response_log']['csv_file']).read_text())))
+                self.assertEqual(len(rows[0]),17)
+                self.assertEqual(rows[0]['pitch_down_deg'],'-4.0')
+                self.assertEqual(rows[0]['gyro_yaw_left_dps'],'13.0')
+                self.assertEqual(rows[0]['rx_roll_us'],'1053')
+                self.assertEqual(rows[0]['servo_roll_us'],'1300')
+                self.assertEqual(rows[0]['status_bits'],'15')
+                self.assertEqual(rows[1]['mode'],'MANUAL_FALLBACK')
+                self.assertEqual(rows[1]['fault'],'IMU_RUNTIME')
+                self.assertEqual(rows[1]['period_us'],'-1')
+                for key in ('roll_deg','pitch_down_deg','gyro_roll_dps'):
+                    self.assertEqual(rows[1][key],'')
+                self.assertEqual(rows[1]['status_bits'],'14')
+            finally:
+                os.chdir(previous)
+
+    def test_sampling_elapsed_ms_across_clock_wrap(self):
+        self.session.started=MOD-500
+        self.start_capture()
+        self.step(550)
+        self.assertEqual(self.session.response.last_ms,1050)
+        self.assertEqual(self.session.response.missed,0)
+
+    def test_snapshot_capacity_or_aux_loss_also_halts_fast_capture(self):
+        self.start_capture()
+        fast=self.session.response
+        self.channel.fresh=lambda a,t:False
+        self.assertFalse(self.step(550))
+        self.assertEqual(fast.count,1)
+        self.assertFalse(self.session.recording)
+        self.channel.fresh=lambda a,t:True
+        self.step(600,998)
+        self.step(800)
+        self.session.count=self.session.buffer.capacity-1
+        self.step(900,1998)
+        self.assertFalse(self.step(1100))
+        self.assertTrue(self.session.full)
+        self.assertEqual(fast.count,1)
+
+    def test_launcher_allocates_both_buffers_before_start_and_releases_after_cancel(self):
+        import app
+        buffers=[]
+        session_type=flight_logger.FlightSession
+        def allocate(*args):
+            buffer=RecordBuffer(*args)
+            buffers.append(buffer)
+            return buffer
+        def wait():
+            self.assertEqual([b.payload_bytes for b in buffers],[19008,64800])
+            raise KeyboardInterrupt
+        with patch.object(config,'LOGGER_PROFILE','response20'), \
+             patch('ram_buffer.RecordBuffer',side_effect=allocate), \
+             patch.object(flight_logger,'FlightSession',side_effect=lambda b,response:session_type(b,self.clock,response)), \
+             patch.object(flight_start,'_wait_for_start',side_effect=wait), \
+             patch.object(app,'run') as run:
+            with self.assertRaises(KeyboardInterrupt): flight_start.run('sensor',wait_for_button=True)
+        run.assert_not_called()
+        for buffer in buffers:
+            with self.assertRaises(RuntimeError): buffer.slot(0)
+
+    def test_failed_response_export_keeps_both_buffers_for_retry(self):
+        import app
+        captured=[]
+        session_type=flight_logger.FlightSession
+        def run(session):
+            captured.append(session)
+            session.started=0
+            session.count=1
+            session.can_export=True
+            session.export_context=({},BenchDiagnostics(10000,50000,4),'ground_button')
+            raise OSError('failed export')
+        try:
+            with patch.object(config,'LOGGER_PROFILE','response20'), \
+                 patch.object(flight_logger,'FlightSession',side_effect=lambda b,response:session_type(b,self.clock,response)), \
+                 patch.object(app,'run',side_effect=run):
+                with self.assertRaises(OSError): flight_start.run('manual')
+            pending=flight_start._pending
+            self.assertIs(pending,captured[0])
+            pending.buffer.slot(0)
+            pending.response.buffer.slot(0)
+            with patch.object(pending,'export',return_value={'saved':True}):
+                self.assertEqual(flight_start.save_pending(),{'saved':True})
+            for buffer in (pending.buffer,pending.response.buffer):
+                with self.assertRaises(RuntimeError): buffer.slot(0)
+        finally:
             flight_start._pending=None
 
 
