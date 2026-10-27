@@ -15,13 +15,13 @@ VERSION = '0.2.3-bench'
 AUTO_START = False
 # Bewusster Logger-Bordstart: None = aus; 'sensor'/'manual' wartet auf BOOT.
 # AUTO_START bleibt False. Fuer den ersten BEC-Test 'sensor' waehlen.
-LOGGER_BOOT_MODE = None
+LOGGER_BOOT_MODE = 'manual'
 # Vor dem Start waehlen: 'snapshot1' fuer lange Laeufe, 'response20' fuer
 # kurze Reaktionstests. Betrifft nur Aufnahme, keine Steuerungsfrequenz.
 LOGGER_PROFILE = 'response20'
 # Besitzer meldet am 2026-10-13 alle Achsentests bestanden. Gespeicherter Stand
 # startet zur erneuten Sichtpruefung ohne PWM; STABILIZE bewusst am Tisch waehlen.
-START_MODE = 'sensor'              # sensor / manual / stabilize
+START_MODE = 'manual'              # sensor / manual / stabilize
 ACTIVE_AXES = ('roll', 'pitch', 'yaw')
 # SENSOR/MANUAL/STABILIZE laut Besitzer bestanden; kein elektrischer/Flugnachweis.
 # Nach anderer Verdrahtung, Polung oder Montage betroffene Bestaetigung entfernen.
@@ -32,9 +32,10 @@ MAX_LOOP_US = 50000                # auch RX-Pollbudget; <= attitude.MAX_DT_S
 CALIBRATION_FILE = 'calibration.json'
 
 SENSOR = {'sda': 4, 'scl': 5, 'freq': 100000,
+          'accel_range_g': 16, 'gyro_range_dps': 2000,
           'acc_offset': (0.0142, 0.02775, 0.19325),
           'acc_scale': (0.9924, 1.00085, 1.02405),
-          'body_axes': (0, 1, 2), 'body_signs': (1, 1, 1)}
+          'body_axes': (0, 1, 2), 'body_signs': (-1, -1, 1)}
 # Geplanter Einbau: Oberseite weiter oben, Sensor-X nach hinten/Y nach rechts.
 # Erst BEIM mechanischen Umbau body_signs=(-1,-1,1) setzen (180 Grad um Z).
 # Das dreht Accel UND Gyro. Danach Lage neu speichern/Richtungen neu pruefen;
@@ -42,6 +43,9 @@ SENSOR = {'sda': 4, 'scl': 5, 'freq': 100000,
 # Aktive Werte oben gehoeren noch zum bisherigen getesteten Aufbau.
 GYRO_STD_MAX = 1.0
 ATTITUDE_ACCEL_GAIN = 1.0          # Gravitation nur schwach zur Driftkorrektur
+# Langsamer Wiederfang nach ruhigen Messungen, kein sprungweises Neu-Nullen im Flug.
+ATTITUDE_RECOVERY = {'quiet_s': 2.0, 'gyro_max_dps': 3.0, 'accel_band_g': 0.05,
+                     'max_correction_dps': 5.0}
 PITCH_CONTROL_LIMIT_DEG = 75.0    # Euler-Reglerbereich, keine Sensorgrenze
 
 # RX-Signale nur 3,3-V-kompatibel an GPIO! Dieser Segler hat kein Gas/Triebwerk.
@@ -55,14 +59,15 @@ RECEIVER = {'roll': {'pin': 2, 'sign': -1},
             'yaw': {'pin': 9, 'sign': -1}}
 RX_TIMEOUT_MS = 100
 NEUTRAL_WINDOW = 0.08
+# MANUAL: diese25 Frames nur beim ersten Start; Wiederkehr mit neuen Frames.
 NEUTRAL_FRAMES = 25
 
 # limit ist Pulsweg in us je Seite, auch in MANUAL: z.B.150 ->1350..1650 us.
 # Ruderausschlag in mm am Modell messen; keinen universellen Servo-Endpunkt
 # aus1000/2000 us ableiten. Flugvorbereitung: docs/ERSTER_MANUAL_DATENFLUG.md.
-SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 200},
-          'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150},
-          'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 150}}
+SERVOS = {'roll': {'pin': 3, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 230},
+          'pitch': {'pin': 6, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 400},
+          'yaw': {'pin': 7, 'center': 1500, 'trim': 0, 'sign': -1, 'limit': 350}}
 # Mit dieser Servopolung erzeugt ein positives internes Nick-/Gierkommando
 # kleinere Pulse: Nase-runter-/Nase-links-Wirkung. Logauswertung: VALIDIERUNG.md.
 
@@ -120,7 +125,7 @@ LOGGER_BENCH = {'version': '0.1.4', 'channel_pin': RECORDING_CHANNEL['pin'], 'po
 # Explizit via flight_start oder BOOT-Freigabe mit LOGGER_BOOT_MODE.
 # Volle 1-Hz-Basisdaten in beiden Profilen; CH3 Start/Pause, BOOT Bodenexport.
 # 632 Records sind Kapazitaet, kein Timer; Ereignisse verbrauchen ebenfalls Slots.
-FLIGHT_LOGGER = {'version': '0.2.0', 'capacity': 632, 'record_bytes': 144,
+FLIGHT_LOGGER = {'version': '0.3.0', 'capacity': 632, 'record_bytes': 144,
                  'records_per_block': 16, 'sample_ms': 1000,
                  'reserve_bytes': 65536, 'flash_reserve_bytes': 131072,
                  # Start-GC ca. 24 ms: Bereinigung nach kurzen Iterationen planen,
@@ -134,7 +139,7 @@ FLIGHT_LOGGER = {'version': '0.2.0', 'capacity': 632, 'record_bytes': 144,
                  'gps_ready_epochs': 5, 'gps_min_satellites': 6,
                  'gps_max_hdop': 2.5}
 
-# 90 s * 20 Hz; dazu 132 volle Snapshots/Ereignisse. 83808 B Nutzdaten,
-# weniger als bisher 91008 B: Platz fuer Zusatzcode, gleiche 64-KiB-Startreserve.
-RESPONSE_LOGGER = {'capacity': 1800, 'record_bytes': 36, 'records_per_block': 48,
+# 90 s * 20 Hz; Gyro in 0.1 Grad/s als int16 statt float: 10800 B weniger RAM.
+# 73008 B insgesamt; Rate/Dauer und 64-KiB-Startreserve bleiben erhalten.
+RESPONSE_LOGGER = {'capacity': 1800, 'record_bytes': 30, 'records_per_block': 48,
                    'sample_ms': 50, 'snapshot_capacity': 132}

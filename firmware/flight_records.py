@@ -7,9 +7,26 @@ Alter 32767 bedeutet >=32767 ms. Flags entscheiden ueber Datenverwendung.
 """
 import math
 import struct
+from io import IOBase
 
 FORMAT = '<IIHBBBBH9f4H3h3H3iIIdd4f2hI2fHBB'
 RECORD_BYTES = struct.calcsize(FORMAT)
+CSV_MAX_ROW_BYTES = 512  # Auch Extremwerte; Grenzwert wird je Exportzeile geprueft.
+
+
+class ByteCounter(IOBase):
+    """Dateigroesse ohne Datei und ohne grossen JSON-/CSV-Gesamtstring zaehlen."""
+    def __init__(self):
+        self.size = 0
+
+    def write(self, data):
+        self.size += len(data.encode('utf-8')) if isinstance(data, str) else len(data)
+        return len(data)
+
+    def ioctl(self, op, arg):
+        return 0 if op in (1, 4) else -1
+
+
 MODES = ('SENSOR', 'WAIT_NEUTRAL', 'MANUAL', 'RX_TIMEOUT', 'MANUAL_FALLBACK', 'STABILIZE')
 FAULTS = ('', 'IMU_START', 'IMU_RUNTIME', 'PITCH_RANGE', 'TIMING')
 KINDS = ('', 'sample', 'start', 'stop', 'channel_invalid', 'full', 'state')
@@ -35,18 +52,23 @@ def encode(buffer, index, ms, segment, kind, control, gps, baro, ch3,
            recording, ready, full):
     """Ein kompletter Record direkt in seinen Block; kein Vollpuffer-Kopieren."""
     block, offset = buffer.slot(index)
+    gyro_ok = control.get('gyro_fresh', control['imu_fresh'])
+    tilt_ok = control.get('tilt_valid', control['imu_fresh'])
     valid = (int(control['imu_fresh']) | int(bool(gps.get('valid'))) << 1 |
              int(baro['valid']) << 2 | int(bool(gps.get('course_usable'))) << 3 |
-             int(bool(gps.get('gga_valid'))) << 4 | int(bool(gps.get('rmc_valid'))) << 5)
+             int(bool(gps.get('gga_valid'))) << 4 | int(bool(gps.get('rmc_valid'))) << 5 |
+             int(gyro_ok) << 6 | int(tilt_ok) << 7)
     status = (int(recording) | int(control['armed']) << 1 |
               int(control['fresh']) << 2 | int(bool(control['pulses'])) << 3 |
               int(ready) << 4 | int(full) << 5)
     struct.pack_into('<IIHBBBBH', block, offset, ms, index, segment, kind,
                      MODES.index(control['mode']), FAULTS.index(control['fault']), valid, status)
     # Ungueltige IMU niemals als frische alte Lage ausgeben. Alter bleibt sichtbar.
-    values = tuple(control['angles']) + tuple(control['sample'])
-    struct.pack_into('<9f', block, offset+16,
-                     *(values if control['imu_fresh'] else (float('nan'),)*9))
+    missing = (float('nan'),)*3
+    values = ((tuple(control['angles']) if tilt_ok else missing) +
+              (tuple(control['sample'][:3]) if control['imu_fresh'] else missing) +
+              (tuple(control['sample'][3:]) if gyro_ok else missing))
+    struct.pack_into('<9f', block, offset+16, *values)
     values = (tuple(control['rx'][0]) + (ch3 or 0,) +
               tuple(age(v) for v in control['rx'][1]) +
               tuple(control['pulses'].get(a, 0) for a in ('roll', 'pitch', 'yaw')) +
@@ -81,11 +103,17 @@ def csv_row(buffer, index):
         values[40] = ''
     if values[43] == 65535:
         values[43] = -1
-    def text(value):
+    def text(index, value):
         if type(value) is float:
-            return '' if not math.isfinite(value) else '%.8f' % value
+            # GPS-Koordinaten behalten8 Nachkommastellen; andere float32-Werte
+            # brauchen keine8 Dezimalstellen.6 signifikante Stellen sparen Flash.
+            return '' if not math.isfinite(value) else (('%.8f' if index in (32, 33)
+                                                        else '%.6g') % value)
         return str(value)
-    return ','.join(text(value) for value in values) + '\n'
+    row = ','.join(text(index, value) for index, value in enumerate(values)) + '\n'
+    if len(row) > CSV_MAX_ROW_BYTES:
+        raise ValueError('Flug-CSV-Zeile ueberschreitet Platzbudget')
+    return row
 
 
 class GroundStop:

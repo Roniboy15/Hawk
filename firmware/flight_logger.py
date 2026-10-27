@@ -12,7 +12,8 @@ import config as cfg
 from gps import GPS, _utc
 from ms5611 import MS5611, relative_altitude
 from recording import RecordingSwitch
-from flight_records import RECORD_BYTES, FORMAT, COLUMNS, GroundStop, encode, csv_row
+from flight_records import (RECORD_BYTES, FORMAT, COLUMNS, CSV_MAX_ROW_BYTES,
+                            GroundStop, ByteCounter, encode, csv_row)
 
 
 class FlightSession:
@@ -78,7 +79,41 @@ class FlightSession:
         self.gc_check_ms, self.gc_pending = None, False
         self.can_export = self.exported = False
         self.export_context = None
-        self.stage_timing = None  # app aktiviert dies nur fuer SENSOR-Diagnose.
+        self.stage_timing = None  # app aktiviert dies fuer SENSOR und MANUAL.
+        self.storage_plan = None
+        self.json_budget = 16384+768*cfg.EVENT_CAPACITY  # Default64 KiB, auch groessere Ringe.
+
+    def storage_budget(self):
+        """Ganze Dateien auf FS-Bloecke runden;128-KiB-Reserve bleibt zusaetzlich."""
+        fs = os.statvfs('.')
+        block = fs[1] or fs[0]
+        free = block*min(fs[3], fs[4])
+        sizes = [len(COLUMNS)+1+self.buffer.capacity*CSV_MAX_ROW_BYTES, self.json_budget]
+        if self.response is not None:
+            from response_log import COLUMNS as FAST_COLUMNS, CSV_MAX_ROW_BYTES as FAST_MAX
+            sizes.append(len(FAST_COLUMNS)+1+self.response.buffer.capacity*FAST_MAX)
+        budget = sum((size+block-1)//block*block for size in sizes)
+        return {'free_bytes': free, 'block_bytes': block, 'full_run_bytes': budget,
+                'reserve_bytes': self.settings['flash_reserve_bytes'],
+                'full_runs_available': max(0, (free-self.settings['flash_reserve_bytes'])//budget)}
+
+    def preflight_storage(self):
+        # Vor BOOT/IMU/RC/PWM: fehlender Platz darf erst gar keine Datensession
+        # vortaeuschen. Keine Logdatei anlegen/loeschen, nur freies FS lesen.
+        self.storage_plan = plan = self.storage_budget()
+        print('Flash:', plan['free_bytes'], 'B frei;', plan['full_run_bytes'],
+              'B je vollem Lauf; mindestens', plan['full_runs_available'], 'Laeufe passen.')
+        if not plan['full_runs_available']:
+            from machine import Pin
+            from neopixel import NeoPixel
+            self.led = NeoPixel(Pin(self.settings['led_pin'], Pin.OUT), 1)
+            self.color((self.settings['led_brightness'], 0, 0))
+            raise OSError('Vor Start zu wenig Exportplatz; alte Logs sichern, kein Test gestartet')
+
+    def write_csv(self, file):
+        file.write(COLUMNS+'\n')
+        for index in range(self.count):
+            file.write(csv_row(self.buffer, index))
 
     def fail(self, name, error):
         # Pro Komponente ein begrenzter Fehler; kein wachsender Fehlerlog im Flug.
@@ -347,13 +382,6 @@ class FlightSession:
         if not self.can_export:
             raise RuntimeError('Flugexport ohne bestaetigte Hardwareabschaltung gesperrt')
         self.color((0, 0, self.settings['led_brightness']))
-        fs = os.statvfs('.')
-        free = (fs[1] or fs[0])*min(fs[3], fs[4])
-        # Konservativer Text-/JSON-Platzbedarf plus Dateisystemreserve.
-        fast_bytes = self.response.count*384 if self.response is not None else 0
-        if free < self.count*1024+fast_bytes+131072+self.settings['flash_reserve_bytes']:
-            self.color((self.settings['led_brightness'], 0, 0))
-            raise OSError('Zu wenig Flash fuer Export plus Reserve; RAM nicht ausschalten')
         for index in range(10000):
             stem = 'flight_%d_%d' % (self.clock.ticks_ms(), index)
             occupied = False
@@ -369,7 +397,7 @@ class FlightSession:
         else:
             raise OSError('Keine freie Fluglog-Dateinummer')
         report = dict(metadata)
-        report.update(schema=2 if self.response is not None else 1, logger_version=self.settings['version'],
+        report.update(schema=3, csv_schema=3, logger_version=self.settings['version'],
                       start_method=self.start_method,
                       logger_configuration=self.settings, recording_channel=dict(cfg.RECORDING_CHANNEL),
                       gps_configuration=dict(cfg.GPS), barometer_configuration=dict(cfg.BAROMETER),
@@ -377,6 +405,7 @@ class FlightSession:
                       csv_rows=self.count, samples=self.samples, segments=self.segment,
                       storage='record_aligned_ram', record_format=FORMAT,
                       allocated_bytes=self.buffer.payload_bytes, capacity=self.buffer.capacity,
+                      storage_preflight=self.storage_plan,
                       record_bytes=RECORD_BYTES, full=self.full, logger_disabled=self.disabled,
                       errors=dict(self.errors), free_after_init_bytes=self.free_after_init,
                       startup_gc_us=self.startup_gc_us,
@@ -387,7 +416,8 @@ class FlightSession:
                                   'automatic_enabled': gc.isenabled()},
                       reserve_check_stage='after_sensors_receiver_before_pwm',
                       duration_ms=self.clock.ticks_diff(self.clock.ticks_ms(), self.started),
-                      valid_bit_names=['imu', 'gps', 'barometer', 'gps_course', 'gga', 'rmc'],
+                      valid_bit_names=['imu', 'gps', 'barometer', 'gps_course', 'gga', 'rmc',
+                                       'gyro', 'tilt'],
                       status_bit_names=['recording', 'rc_armed', 'control_rx_fresh',
                                         'pwm_present', 'gps_ready', 'full'],
                       reference_pa=self.reference_pa, diagnostics=diagnostics.report(),
@@ -396,10 +426,28 @@ class FlightSession:
         report['stage_timing'] = self.stage_timing.report() if self.stage_timing is not None else None
         if self.response is not None:
             report['response_log'] = self.response.report(stem+'_response.csv')
+        # Erst nach Hardwarestop einmal dieselben Ausgaben zaehlen. Keine grossen
+        # Gesamtstrings und keine pauschale1-MB-Schwelle fuer ein~200-kB-Log.
+        counter = ByteCounter()
+        self.write_csv(counter)
+        sizes = [counter.size]
+        if self.response is not None:
+            counter.size = 0
+            self.response.write_csv(counter)
+            sizes.append(counter.size)
+        counter.size = 0
+        json.dump(report, counter)
+        if counter.size > self.json_budget:
+            raise ValueError('JSON-Diagnose ueberschreitet vorbereitetes Platzbudget; RAM behalten')
+        sizes.append(counter.size)
+        fs = os.statvfs('.')
+        block = fs[1] or fs[0]
+        needed = sum((size+block-1)//block*block for size in sizes)+self.settings['flash_reserve_bytes']
+        if block*min(fs[3], fs[4]) < needed:
+            self.color((self.settings['led_brightness'], 0, 0))
+            raise OSError('Export braucht %d B inkl. Reserve; RAM nicht ausschalten' % needed)
         with open(stem+'.csv', 'w') as file:
-            file.write(COLUMNS+'\n')
-            for index in range(self.count):
-                file.write(csv_row(self.buffer, index))
+            self.write_csv(file)
         if self.response is not None:
             self.response.export(stem+'_response.csv')
         with open(stem+'.json', 'w') as file:

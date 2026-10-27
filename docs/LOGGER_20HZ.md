@@ -1,4 +1,11 @@
-# Logger 0.2.0: kurze Reaktionstests mit 20 Hz
+# Logger: kurze Reaktionstests mit 20 Hz
+
+Aktuell vorbereitet: [Logger0.3.0 und konkreter Bodenvergleich](LOGGER_030_TEST.md)
+auf `codex/manual-flight-tests-20hz`.30-Byte-Records,0.1-Grad/s-Gyro,
+73008 B RAM,Schema3 mit getrennten Gyro-/Lageflags; Rate/90-s-Budget erhalten.
+Vorab-Flashpruefung und gezaehlter Export, neue IMU-Bereiche/Wiederfang noch
+physisch nachzuweisen. Die folgende Beschreibung dokumentiert0.2.0/R1..R3;
+deren bestandene Ergebnisse gelten nicht automatisch fuer die neue Firmware.
 
 Branch: `codex/response-logger-20hz`, Basis `8f6ed38`. R1/R2 am2026-10-25
 funktional bestanden:608/1800 schnelle Zeilen, praktisch20 Hz, keine Timing-

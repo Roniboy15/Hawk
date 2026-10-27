@@ -5,6 +5,7 @@ import io
 import json
 import math
 import os
+import struct
 from pathlib import Path
 import sys
 import tempfile
@@ -55,6 +56,45 @@ def raw_record(buffer,index):
 
 
 class RecordsTests(unittest.TestCase):
+    def test_csv_budget_covers_extreme_record_fields_and_fast_row(self):
+        b=RecordBuffer(1,144)
+        # Alle Integergrenzen und laengste float32-Notation; Koordinaten WGS84.
+        values=([4294967295,4294967295,65535,4,4,2,255,65535]+[-1.23456e-30]*9+
+                [65535]*4+[-32768]*3+[65535]*3+[-2147483648]*3+
+                [4294967294,311299,-89.99999999,-179.99999999]+[-1.23456e-30]*4+
+                [-32768]*2+[4294967295,-1.23456e-30,-1.23456e-30,65534,255,255])
+        block,offset=b.slot(0)
+        struct.pack_into(records.FORMAT,block,offset,*values)
+        self.assertLessEqual(len(records.csv_row(b,0)),records.CSV_MAX_ROW_BYTES)
+        from response_log import FORMAT,CSV_MAX_ROW_BYTES
+        fast=ResponseLog(RecordBuffer(1800,30,48))
+        block,offset=fast.buffer.slot(0)
+        struct.pack_into(FORMAT,block,offset,4294967295,*([-32768]*5),
+                         *([65535]*6),65534,36,255)
+        fast.count=1
+        file=io.StringIO(); fast.write_csv(file)
+        self.assertLessEqual(len(file.getvalue().splitlines()[1])+1,CSV_MAX_ROW_BYTES)
+
+    def test_byte_counter_handles_json_utf8_and_native_binary_writes(self):
+        data={'message':'Groesse: \u00b5 / \u00e4', 'values':[1, -2.5, None]}
+        counter=records.ByteCounter()
+        json.dump(data,counter,ensure_ascii=False)
+        self.assertEqual(counter.size,len(json.dumps(data,ensure_ascii=False).encode('utf-8')))
+        self.assertEqual(counter.write(b'123'),3)
+        self.assertEqual(counter.ioctl(4,None),0)
+
+    def test_accel_invalid_keeps_gyro_and_untrusted_tilt_stays_missing(self):
+        buffer=RecordBuffer(1,144)
+        c=dict(control(),imu_fresh=False,gyro_fresh=True,tilt_valid=False)
+        records.encode(buffer,0,2000,1,1,c,{},
+                       {'valid':False,'pressure_pa':None,'temperature_c':None,
+                        'relative_height_m':None,'age_ms':-1},1998,True,False,False)
+        row=next(csv.DictReader(io.StringIO(records.COLUMNS+'\n'+records.csv_row(buffer,0))))
+        self.assertEqual(row['roll_deg'],'')
+        self.assertEqual(row['acc_z_g'],'')
+        self.assertEqual(float(row['gyro_roll_dps']),11)
+        self.assertEqual(int(row['valid_bits']) & 193,64)
+
     def test_stage_timing_preserves_previous_slow_iteration_across_tick_wrap(self):
         clock=Clock()
         clock.us=MOD-2000
@@ -396,6 +436,30 @@ class SessionTests(unittest.TestCase):
         self.assertFalse(self.session.exported)
         self.assertEqual(raw_record(self.session.buffer,0),before)
 
+    def test_preflight_reports_three_or_two_runs_with_reserve_unchanged(self):
+        def fs(free): return (4096,4096,1000,free//4096,free//4096)
+        with patch.object(flight_logger.os,'statvfs',return_value=fs(2000000)):
+            budget=self.session.storage_budget()['full_run_bytes']
+        reserve=self.session.settings['flash_reserve_bytes']
+        for slots,free in ((3,reserve+3*budget),(2,reserve+3*budget-4096)):
+            with patch.object(flight_logger.os,'statvfs',return_value=fs(free)), \
+                 contextlib.redirect_stdout(io.StringIO()):
+                self.session.preflight_storage()
+            self.assertEqual(self.session.storage_plan['full_runs_available'],slots)
+            self.assertEqual(self.session.storage_plan['reserve_bytes'],131072)
+
+    def test_large_json_is_rejected_before_creating_files_and_keeps_ram(self):
+        self.start_capture()
+        first=raw_record(self.session.buffer,0)
+        self.session.can_export=True
+        with patch('builtins.open') as opened:
+            with self.assertRaises(ValueError):
+                self.session.export({'too_large':'x'*self.session.json_budget},
+                                    BenchDiagnostics(10000,50000,4),'ground_button')
+            opened.assert_not_called()
+        self.assertFalse(self.session.exported)
+        self.assertEqual(raw_record(self.session.buffer,0),first)
+
     def test_real_start_refuses_low_reserve_and_resources_can_close(self):
         pin=Mock()
         pin.OUT=1
@@ -432,6 +496,24 @@ class LauncherTests(unittest.TestCase):
              patch('ram_buffer.RecordBuffer') as allocate:
             with self.assertRaises(ValueError): flight_start.run('stabilize')
             allocate.assert_not_called()
+
+    def test_low_flash_refuses_before_boot_or_controller_and_releases_ram(self):
+        import app
+        buffer=RecordBuffer(632,144)
+        pin=Mock(OUT=1); led=MagicMock()
+        session_type=flight_logger.FlightSession
+        with patch('ram_buffer.RecordBuffer',return_value=buffer), \
+             patch.object(flight_logger,'FlightSession',side_effect=lambda b:session_type(b,Clock())), \
+             patch.object(flight_logger.os,'statvfs',return_value=(4096,4096,1,1,1)), \
+             patch.dict(sys.modules,{'machine':types.SimpleNamespace(Pin=pin),
+                                     'neopixel':types.SimpleNamespace(NeoPixel=Mock(return_value=led))}), \
+             patch.object(flight_start,'_wait_for_start') as button, \
+             patch.object(app,'run') as run, contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaises(OSError): flight_start.run('manual',wait_for_button=True)
+        button.assert_not_called(); run.assert_not_called()
+        self.assertIsNone(flight_start._pending)
+        with self.assertRaises(RuntimeError): buffer.slot(0)
+        led.__setitem__.assert_called_once_with(0,(12,0,0))
 
     def test_main_default_boot_modes_and_legacy_start_are_separate(self):
         source=(Path(__file__).resolve().parents[1]/'firmware/main.py').read_text()
@@ -558,7 +640,7 @@ class ResponseTests(SessionTests):
     def setUp(self):
         super().setUp()
         self.session=flight_logger.FlightSession(RecordBuffer(132,144),self.clock,
-                response=ResponseLog(RecordBuffer(1800,36,48)))
+                response=ResponseLog(RecordBuffer(1800,30,48)))
         self.session.started=0
         self.session.aux=self.channel
         self.session.button=lambda:False
@@ -577,7 +659,7 @@ class ResponseTests(SessionTests):
         self.assertEqual(records.decode(self.session.buffer,self.session.count-1)[3],5)
         self.assertEqual(fast.report('test.csv')['interval_mean_ms'],50)
         self.assertEqual(fast.missed,0)
-        self.assertEqual(fast.buffer.payload_bytes+self.session.buffer.payload_bytes,83808)
+        self.assertEqual(fast.buffer.payload_bytes+self.session.buffer.payload_bytes,73008)
 
     def test_20hz_deadlines_do_not_drift_or_fabricate_catchup_samples(self):
         self.start_capture()  # erster schneller Wert bei 500 ms
@@ -599,6 +681,66 @@ class ResponseTests(SessionTests):
         self.assertEqual(fast.count,count+1)
         self.assertEqual(fast.missed,missed)
 
+    def test_three_full_exports_fit_original_free_flash_without_overwriting(self):
+        self.start_capture()
+        with patch('builtins.open',side_effect=AssertionError('Flash im Loop')):
+            for ms in range(550,90500,50): self.step(ms)
+        self.assertEqual(self.session.response.count,1800)
+        self.session.can_export=True
+        with tempfile.TemporaryDirectory() as folder:
+            previous=os.getcwd()
+            try:
+                os.chdir(folder)
+                def fs(_):
+                    used=sum((f.stat().st_size+4095)//4096*4096 for f in Path('.').iterdir())
+                    free=(1265664-used)//4096
+                    return (4096,4096,512,free,free)
+                with patch.object(flight_logger.os,'statvfs',side_effect=fs), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.session.preflight_storage()
+                    self.assertEqual(self.session.storage_plan['full_runs_available'],3)
+                    for _ in range(3):
+                        self.session.export({},BenchDiagnostics(10000,50000,4),'ground_button')
+                self.assertEqual(len(list(Path('.').glob('*.csv'))),6)
+                self.assertEqual(len(list(Path('.').glob('*.json'))),3)
+                self.assertGreaterEqual(fs('.')[3]*4096,131072)
+            finally: os.chdir(previous)
+
+    def test_maximum_transition_ring_fits_reserved_json_budget(self):
+        self.start_capture()
+        diag=BenchDiagnostics(10000,50000,config.EVENT_CAPACITY)
+        for index in range(config.EVENT_CAPACITY):
+            mode='MANUAL_FALLBACK' if index%2 else 'RX_TIMEOUT'
+            diag.transition(1000000000+index,mode,'IMU_RUNTIME',False,False,30000,False,
+                            ([2000]*3,[32767]*3,[1000000000]*3),
+                            {'roll':1730,'pitch':1900,'yaw':1850})
+        self.session.can_export=True
+        with tempfile.TemporaryDirectory() as folder:
+            previous=os.getcwd()
+            try:
+                os.chdir(folder)
+                import app
+                with contextlib.redirect_stdout(io.StringIO()):
+                    report=self.session.export(app.run_metadata({}),diag,'ground_button')
+                self.assertEqual(len(report['diagnostics']['events']),config.EVENT_CAPACITY)
+                self.assertLessEqual(Path(report['csv_file']).with_suffix('.json').stat().st_size,
+                                     self.session.json_budget)
+            finally: os.chdir(previous)
+
+    def test_quantized_gyro_covers_disc_start_rates_and_preserves_validity(self):
+        fast=self.session.response
+        c=dict(control(),sample=(16,0,0,1999.96,-1999.96,0.04),imu_fresh=False,
+               gyro_fresh=True,tilt_valid=False)
+        fast.sample(1,1,c)
+        file=io.StringIO(); fast.write_csv(file)
+        row=next(csv.DictReader(io.StringIO(file.getvalue())))
+        self.assertEqual(row['roll_deg'],'')
+        self.assertEqual(float(row['gyro_roll_dps']),2000)
+        self.assertEqual(float(row['gyro_pitch_down_dps']),-2000)
+        self.assertEqual(float(row['gyro_yaw_left_dps']),0)
+        self.assertEqual(int(row['status_bits']) & 49,16)
+        self.assertEqual(fast.buffer.payload_bytes,54000)
+
     def test_export_both_streams_roundtrip_flags_and_preserve_existing_files(self):
         self.start_capture()
         c=control()
@@ -614,7 +756,7 @@ class ResponseTests(SessionTests):
                      patch.object(flight_logger.os,'statvfs',return_value=(4096,4096,1024,512,512)):
                     report=self.session.export({},BenchDiagnostics(10000,50000,4),'ground_button')
                 self.assertEqual(Path('flight_500_0_response.csv').read_text(),'old evidence')
-                self.assertEqual(report['schema'],2)
+                self.assertEqual(report['schema'],3)
                 self.assertEqual(report['logger_configuration']['profile'],'response20')
                 self.assertEqual(report['response_log']['samples'],2)
                 rows=list(csv.DictReader(io.StringIO(Path(report['response_log']['csv_file']).read_text())))
@@ -623,7 +765,7 @@ class ResponseTests(SessionTests):
                 self.assertEqual(rows[0]['gyro_yaw_left_dps'],'13.0')
                 self.assertEqual(rows[0]['rx_roll_us'],'1053')
                 self.assertEqual(rows[0]['servo_roll_us'],'1300')
-                self.assertEqual(rows[0]['status_bits'],'15')
+                self.assertEqual(rows[0]['status_bits'],'63')
                 self.assertEqual(rows[1]['mode'],'MANUAL_FALLBACK')
                 self.assertEqual(rows[1]['fault'],'IMU_RUNTIME')
                 self.assertEqual(rows[1]['period_us'],'-1')
@@ -665,7 +807,7 @@ class ResponseTests(SessionTests):
             buffers.append(buffer)
             return buffer
         def wait():
-            self.assertEqual([b.payload_bytes for b in buffers],[19008,64800])
+            self.assertEqual([b.payload_bytes for b in buffers],[19008,54000])
             raise KeyboardInterrupt
         with patch.object(config,'LOGGER_PROFILE','response20'), \
              patch('ram_buffer.RecordBuffer',side_effect=allocate), \

@@ -501,6 +501,60 @@ runtime code needed. docs/ERSTER_MANUAL_DATENFLUG.md gives measurement sheet
 and first MANUAL flight workflow. Preserve AUTO_START=False/LOGGER_BOOT_MODE=None
 in repository; board setting manual is explicit operator choice. No push/merge.
 
+Owner/result update2026-10-27: current user config sets limits230/400/350 us
+for roll/pitch/yaw, reported throws13/12/19..20 mm; direction-specific throws
+not supplied. Rudders free/functioning by owner report; CG optimization and
+component securing still planned, no actual flight yet. Preserve user changes
+to LOGGER_BOOT_MODE/START_MODE='manual' and body_signs=(-1,-1,1); AUTO_START=False
+and deliberate BOOT start remain. R4 flight_229208_0:211.419 s,41.691 s capture,
+833 fast/43 full rows,20 Hz mean,0 missed/0 trips, continuous MANUAL after572 ms,
+2628 commands match. IMU_RUNTIME before recording, acc-Z32767;15 fast rows
+invalid,818 valid despite latched fault. All43 full rows GPS-fix but NOT ready:
+3..5 sats/HDOP4.73..5.59. No parser/poll gaps; clean BOOT export. See
+R4_response20_limits_indoor/AUSWERTUNG.md.225 host tests pass after correcting
+two old fixture assumptions (mount reference/explicit200-us trim-test range),
+no firmware fix. CH3 segments share one1800-record RAM budget; trim does not
+disarm while fresh, but RX/timing recovery still needs neutral. See flight doc.
+Current documentation/evidence changes are not a commit authorization.
+
+First real flights2026-10-27: flights/F1/flight_868672_0 contains six owner-
+confirmed Discus flights, no special maneuvers; five stop-complete, sixth FULL
+truncated.817.961 s runtime,90.021 s capture,1800 fast/98 full rows,0 trips or
+RX rearm after568-ms enable,5694 commands match.1617 fast IMU-valid,183 invalid;
+first raw acc-Z32767 before first recording. Persistent attitude inconsistency:
+quiet end samples show40.7..77.8 deg gravity mismatch after level restoration.
+app skips pose integration on saturation;25-deg correction gate can exclude
+recovery. Real Attitude host probe holds wrong60-deg roll after10 s stationary.
+Do not equate fresh gyro with recovered angles or tune angle gains from them.
+All98 GPS-ready/baro valid,10..12 sats/HDOP1.09..1.58, parser/poll gaps0. Owner
+reports light westwind/lee, heavier BEC~22 g total,22-g tail ballast, mass/CG
+unmeasured, intentional transmitter roll trim matching~1538-us baseline.
+Successful files235937 B; check requires1053696 B free for same run. Second
+export reportedly red then powered off: RAM lost, capacity check leading but
+unproven cause. Next targeted pre-start export-space check and launch-capable
+IMU range/attitude recovery; no firmware change or commit authorized by this
+analysis. See docs/testdaten/fluglogger/flights/F1/AUSWERTUNG.md and figures.
+
+Owner implementation request2026-10-27: logger0.3.0 on current
+codex/manual-flight-tests-20hz, no new branch/commit/push/merge. Pre-start FS
+budget and post-shutdown exact counting replace the oversized export guard;
+128-KiB FS reserve unchanged, old files never deleted/overwritten. At4096-B
+blocks response20 budgets376832 B/run; three require1261568 B free, two884736.
+These are separate exported runs: RAM still1800/90 s across CH3 segments.
+Fast gyro int16/0.1 dps makes30-B records/73008-B total payload, unchanged
+64-KiB start reserve. CSV/JSON schema3 adds separate gyro/tilt validity flags.
+IMU16 g/2000 dps with matching divisors/readback. Owner supplier link names
+MPU6050; WHO_AM_I0x72 remains unconfirmed hardware identity. Larger ranges do
+not establish unclipped launch maxima. Accel saturation retains valid gyro
+integration; gyro clipping/read/timing gaps invalidate tilt. Finite rotation
+and bounded quiet-recovery after2 s, <3 dps, |a|-1<0.05 g, max5 dps correction;
+valid again below5 deg residual, automation fault never auto-cleared. This is
+a heuristic, not proof of stationary flight/attitude accuracy.241 host tests
+pass; no new native MicroPython or board timing/RAM qualification. Preserve
+calibration/signs/gains/limits. Next docs/LOGGER_030_TEST.md. Future flight
+data archive recommendation docs/DATEN_UND_GIT.md; current evidence untouched,
+no repository split/history edits performed.
+
 Keep changes small and preserve the separation of pure mathematics, hardware
 adapters and application orchestration. Describe coordinates, signs and units.
 Keep pins, gains and limits in `firmware/config.py`.
@@ -511,13 +565,29 @@ Preserve device calibration; never silently overwrite it during source deploymen
 
 ## Safety contracts
 
+Owner request2026-10-27 authorizes commit/push of this stand on the current
+branch, not merge to main. Keep R4/F1 evidence and implementation/docs in
+separate commits. Existing docs/testdaten remains valid for selected tracked
+evidence; a separate data repository is optional, no migration requested.
+Main integration includes tests/tools/README/docs with firmware; ordinary
+merge also includes tracked data changes. README must separate tested0.2.0
+flights from host-only0.3.0 preparation. No hardware actions authorized here.
+
+Owner decision2026-10-27: no in-flight neutral requirement after MANUAL RX
+recovery. Gate now retains prior initial enable and resumes on the first new
+fresh set of all control axes, also after timing discard. Startup/restart
+still require neutral; STABILIZE recovery policy is unchanged.244 host tests
+pass, including per-axis offcenter recovery and legacy/new report checks.
+Physical recovery test remains open; no hardware operated or commit made.
+
 - `AUTO_START=False` and `START_MODE='sensor'` are the safe defaults.
 - SENSOR produces no PWM. First output requires valid RC calibration and fresh
   neutral frames; stabilization additionally requires a valid level reference.
-- RX loss commands configured trim-neutral after output activation and clears
-  the neutral gate. Reacquisition requires fresh neutral frames.
-- Detected timing loss discards buffered RC, neutralizes active outputs and
-  requires fresh neutral frames before software fallback can resume.
+- RX loss commands configured trim-neutral after output activation. MANUAL
+  reacquisition after initial enable needs new fresh frames, without neutral.
+  STABILIZE retains neutral reacquisition. First activation always needs neutral.
+- Detected timing loss discards buffered RC and neutralizes active outputs.
+  MANUAL resumes with new fresh frames; STABILIZE retains the neutral gate.
 - Automation faults latch. Manual fallback depends on a functioning MCU and
   valid receiver input; it is not an independent recovery route.
 - Final servo pulses remain bounded after trim. Integral anti-windup must account

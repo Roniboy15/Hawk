@@ -1,6 +1,6 @@
 """Kompakte MANUAL-Reaktion: 20 Hz im RAM, CSV erst nach Hardwarestop.
 
-Winkel als 0.01 Grad, Gyro weiter als float in Grad/s. Zeitstempel ist der
+Winkel als 0.01 Grad, Gyro als 0.1 Grad/s in int16. Zeitstempel ist der
 Logger-Eintritt nach PWM, kein gemessener Servo-/Sensor-Capture-Zeitpunkt.
 Segmente stehen mit denselben ms-Zeitmarken im vollstaendigen 1-Hz-Log.
 """
@@ -9,8 +9,9 @@ import struct
 import config as cfg
 from flight_records import MODES, FAULTS
 
-FORMAT = '<I2h3f6HHBB'
-RECORD_BYTES = struct.calcsize(FORMAT)  # 36 statt 144 Byte je schneller Zeile.
+FORMAT = '<I5h6HHBB'
+RECORD_BYTES = struct.calcsize(FORMAT)  # 30 Byte, weiterhin1800 Werte/90 s.
+CSV_MAX_ROW_BYTES = 132
 COLUMNS = ('ms,sequence,roll_deg,pitch_down_deg,gyro_roll_dps,'
            'gyro_pitch_down_dps,gyro_yaw_left_dps,rx_roll_us,rx_pitch_us,'
            'rx_yaw_us,servo_roll_us,servo_pitch_us,servo_yaw_us,period_us,'
@@ -41,15 +42,19 @@ class ResponseLog:
         self.next_ms += (late//50+1)*50
         angles, sample, rx = control['angles'], control['sample'], control['rx'][0]
         pulses, valid = control['pulses'], control['imu_fresh']
+        gyro_ok = control.get('gyro_fresh', valid)
+        tilt_ok = control.get('tilt_valid', valid)
         period = control['period_us']
         status = (int(valid) | int(control['armed']) << 1 |
-                  int(control['fresh']) << 2 | int(bool(pulses)) << 3)
+                  int(control['fresh']) << 2 | int(bool(pulses)) << 3 |
+                  int(gyro_ok) << 4 | int(tilt_ok) << 5)
         block, offset = self.buffer.slot(self.count)
         struct.pack_into(FORMAT, block, offset, ms,
-                         round(angles[0]*100) if valid else 32767,
-                         round(angles[1]*100) if valid else 32767,
-                         sample[3] if valid else NAN, sample[4] if valid else NAN,
-                         sample[5] if valid else NAN, rx[0], rx[1], rx[2],
+                         round(angles[0]*100) if tilt_ok else 32767,
+                         round(angles[1]*100) if tilt_ok else 32767,
+                         round(sample[3]*10) if gyro_ok else 32767,
+                         round(sample[4]*10) if gyro_ok else 32767,
+                         round(sample[5]*10) if gyro_ok else 32767, rx[0], rx[1], rx[2],
                          pulses.get('roll', 0), pulses.get('pitch', 0), pulses.get('yaw', 0),
                          period if period is not None and 0 <= period < 65535 else 65535,
                          MODES.index(control['mode']) | FAULTS.index(control['fault']) << 4,
@@ -70,21 +75,29 @@ class ResponseLog:
                 'missed_samples': self.missed, 'interval_min_ms': self.interval_min,
                 'interval_max_ms': self.interval_max,
                 'interval_mean_ms': self.interval_sum/self.intervals if self.intervals else None,
-                'status_bit_names': ['imu', 'rc_armed', 'control_rx_fresh', 'pwm_present']}
+                'gyro_resolution_dps': 0.1,
+                'status_bit_names': ['imu', 'rc_armed', 'control_rx_fresh', 'pwm_present',
+                                     'gyro', 'tilt']}
+
+    def write_csv(self, file):
+        file.write(COLUMNS+'\n')
+        for index in range(self.count):
+            block, offset = self.buffer.slot(index)
+            row = list(struct.unpack_from(FORMAT, block, offset))
+            for axis in (1, 2, 3, 4, 5):
+                row[axis] = row[axis]/(100 if axis < 3 else 10) if row[axis] != 32767 else NAN
+            if row[12] == 65535:
+                row[12] = -1
+            packed = row[13]
+            row[13:14] = [MODES[packed & 15], FAULTS[packed >> 4]]
+            row.insert(1, index)
+            text = ','.join('' if type(v) is float and not math.isfinite(v)
+                            else str(v) for v in row)+'\n'
+            if len(text) > CSV_MAX_ROW_BYTES:
+                raise ValueError('Response-CSV-Zeile ueberschreitet Platzbudget')
+            file.write(text)
 
     def export(self, filename):
         # Nur FlightSession.export() nach bestaetigtem Hardwarestop ruft dies auf.
         with open(filename, 'w') as file:
-            file.write(COLUMNS+'\n')
-            for index in range(self.count):
-                block, offset = self.buffer.slot(index)
-                row = list(struct.unpack_from(FORMAT, block, offset))
-                for axis in (1, 2):
-                    row[axis] = row[axis]/100 if row[axis] != 32767 else NAN
-                if row[12] == 65535:
-                    row[12] = -1
-                packed = row[13]
-                row[13:14] = [MODES[packed & 15], FAULTS[packed >> 4]]
-                row.insert(1, index)
-                file.write(','.join('' if type(v) is float and not math.isfinite(v)
-                                    else str(v) for v in row)+'\n')
+            self.write_csv(file)

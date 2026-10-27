@@ -4,7 +4,8 @@ Hauptklassen: AxisController (Sollwinkel -> Sollrate -> Servooffset), Gate.
 Logik: begrenzter P-Regler aussen, PI-Regler innen; I standardmaessig 0.
 Integrator begrenzt und bei Saettigung gegen Weiteraufbau geschuetzt.
 Gier benutzt nur Sollrate (kein driftender absoluter Gierwinkel).
-Gate verlangt neue RC-Frames in Neutral nur vor Aktivierung/nach RX-Ausfall.
+Gate verlangt neue RC-Frames in Neutral vor Aktivierung. Im MANUAL-Profil
+nach Ausfall sofort mit neuen frischen Frames fortsetzen, ohne Zentrieren.
 Nach Aktivierung bleibt Trimmen ein gueltiges Kommando, ohne neue Freigabe.
 Ein Automatikfehler wechselt bei gueltigem RX in manuellen Boden-Ersatzmodus;
 kein unabhaengiger Hardware-Bypass. Wiederherstellung nur durch Neustart.
@@ -35,17 +36,25 @@ class AxisController:
 
 
 class Gate:
-    def __init__(self, frames=25, window=0.08):
+    def __init__(self, frames=25, window=0.08, resume_after_loss=False):
         self.frames, self.window = frames, window
         self.count = 0
         self.armed = False
+        self.resume_after_loss = resume_after_loss
+        self.was_armed = False
 
     def update(self, fresh, sticks, new_frame):
         if not fresh:
             self.armed, self.count = False, 0
         elif not self.armed and new_frame:
-            self.count = self.count+1 if all(abs(s) <= self.window for s in sticks) else 0
-            self.armed = self.count >= self.frames
+            if self.resume_after_loss and self.was_armed:
+                # Bereits bewusst gestarteter MANUAL-Flug: aktuelles Kommando
+                # sofort wieder annehmen, keine Neutralstellung im Flug verlangen.
+                self.armed = True
+            else:
+                self.count = self.count+1 if all(abs(s) <= self.window for s in sticks) else 0
+                self.armed = self.count >= self.frames
+            self.was_armed = self.was_armed or self.armed
         return self.armed
 
 

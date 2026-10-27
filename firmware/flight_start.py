@@ -67,6 +67,7 @@ def run(profile='sensor', wait_for_button=False):
             session = FlightSession(buffer, response=ResponseLog(fast_buffer))
         else:
             session = FlightSession(buffer)
+        session.preflight_storage()
         if wait_for_button:
             _wait_for_start()
             session.start_method = 'boot_button'

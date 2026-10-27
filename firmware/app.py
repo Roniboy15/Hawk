@@ -19,7 +19,7 @@ import sys
 import time
 import config as cfg
 from calibration import load, check_orientation
-from imu import IMU, validate_transform
+from imu import IMU, validate_transform, ranges
 from attitude import Attitude, wrap_degrees, quaternion, body_error, clamp, MAX_DT_S
 from receiver import Receiver, normalize
 from control import AxisController, Gate, select_mode
@@ -78,6 +78,10 @@ def validate_config():
             raise ValueError(name+' muss positiv sein')
     _number('GYRO_STD_MAX', cfg.GYRO_STD_MAX, 0)
     _number('ATTITUDE_ACCEL_GAIN', cfg.ATTITUDE_ACCEL_GAIN, 0)
+    ranges(cfg.SENSOR)
+    for name, low, high in (('quiet_s', 1, 10), ('gyro_max_dps', 0.1, 10),
+                             ('accel_band_g', 0.01, 0.1), ('max_correction_dps', 0.1, 10)):
+        _number('Lage-Wiederfang '+name, cfg.ATTITUDE_RECOVERY[name], low, high)
     _number('PITCH_CONTROL_LIMIT_DEG', cfg.PITCH_CONTROL_LIMIT_DEG, 0, 90)
     if cfg.GYRO_STD_MAX == 0 or not 0 < cfg.PITCH_CONTROL_LIMIT_DEG < 90:
         raise ValueError('Sensor-/Nickgrenze ungueltig')
@@ -138,9 +142,11 @@ def run_metadata(data):
             'loop_us': cfg.LOOP_US, 'max_loop_us': cfg.MAX_LOOP_US,
             'rx_timeout_ms': cfg.RX_TIMEOUT_MS, 'neutral_frames': cfg.NEUTRAL_FRAMES,
             'neutral_window': cfg.NEUTRAL_WINDOW,
+            'rx_recovery_requires_neutral': cfg.START_MODE != 'manual',
             'log_hz': cfg.LOG_HZ, 'console_hz': cfg.CONSOLE_HZ,
             'log_capacity': cfg.LOG_CAPACITY, 'event_capacity': cfg.EVENT_CAPACITY,
             'gyro_std_max': cfg.GYRO_STD_MAX, 'attitude_accel_gain': cfg.ATTITUDE_ACCEL_GAIN,
+            'attitude_recovery': cfg.ATTITUDE_RECOVERY,
             'pitch_control_limit_deg': cfg.PITCH_CONTROL_LIMIT_DEG,
             'sensor': cfg.SENSOR, 'flight_attitude_trim': cfg.FLIGHT_ATTITUDE_TRIM,
             'receiver': {a: cfg.RECEIVER[a] for a in cfg.ACTIVE_AXES},
@@ -178,10 +184,11 @@ def run(session=None):
         session.stage_timing = stages
     metadata = run_metadata(data)
     fault = ''
-    pose = Attitude(cfg.ATTITUDE_ACCEL_GAIN)
+    pose = Attitude(cfg.ATTITUDE_ACCEL_GAIN, cfg.ATTITUDE_RECOVERY)
     controllers = {axis: AxisController(cfg.CONTROLLERS[axis], cfg.SERVOS[axis]['limit'])
                    for axis in cfg.ACTIVE_AXES}
-    gate = Gate(cfg.NEUTRAL_FRAMES, cfg.NEUTRAL_WINDOW)
+    gate = Gate(cfg.NEUTRAL_FRAMES, cfg.NEUTRAL_WINDOW,
+                resume_after_loss=cfg.START_MODE == 'manual')
     last_sequence = {}
     sample = (0, 0, 1, 0, 0, 0)
     angles = (0, 0, 0)
@@ -218,7 +225,8 @@ def run(session=None):
               '| Achsen:', cfg.ACTIVE_AXES)
         print('Koerperkonvention: +roll=rechts, +pitch=Nase runter, +yaw=Nase links')
         print('Richtungen bestaetigt:', cfg.DIRECTION_CHECKED_AXES)
-        print('Neutral wird nur vor Aktivierung/nach RX-Ausfall verlangt.')
+        print('Neutral nur beim ersten Start.' if cfg.START_MODE == 'manual' else
+              'Neutral vor Aktivierung und nach RX-Ausfall.')
         print('Ohne Lagekalibrierung: Winkel relativ zum Sensorkoordinatensystem.')
         previous = time.ticks_us()
         started = time.ticks_ms()
@@ -239,6 +247,7 @@ def run(session=None):
             timing_failed = elapsed_us < 0 or elapsed_us > cfg.MAX_LOOP_US
             sensor_error = None
             imu_fresh = False
+            gyro_fresh = False
             # Beim Datenlogger IMU nach einem verriegelten Automatikfehler weiter
             # erfassen. Fault bleibt gesetzt; das schaltet keine Stabilisierung frei.
             if imu is not None and (not fault or session is not None) and not timing_failed:
@@ -248,14 +257,22 @@ def run(session=None):
                     # darf nicht noch einen STABILIZE-Ausgang mit altem dt liefern.
                     timing_failed = deadline_missed(start)
                     if not timing_failed:
-                        if imu.saturated:
+                        if getattr(imu, 'gyro_saturated', imu.saturated):
                             raise ValueError('Messbereich ueberschritten')
-                        pose.update(sample, dt)
+                        # Accel-Clipping darf gueltige Gyrodrehung nicht verlieren.
+                        # Automatikfehler bleibt trotzdem verriegelt.
+                        pose.update(sample, dt, use_accel=not getattr(imu, 'accel_saturated', False))
                         angles = pose.angles()
-                        imu_fresh = True
+                        gyro_fresh = True
+                        imu_fresh = not imu.saturated
+                        if (imu.saturated or not pose.tilt_valid) and not fault:
+                            # Ungueltige Lage nach TIMING ersetzt dessen Ursache nicht.
+                            sensor_error = ValueError('Accel gesaettigt oder Lage noch ungueltig')
+                            fault = 'IMU_RUNTIME'
                         if not fault and abs(angles[1]) > cfg.PITCH_CONTROL_LIMIT_DEG:
                             fault = 'PITCH_RANGE'
                 except Exception as error:
+                    pose.invalidate()
                     fault = 'IMU_RUNTIME'
                     sensor_error = error
             if stages is not None:
@@ -266,10 +283,12 @@ def run(session=None):
                 receiver.poll(now)
                 timing_failed = deadline_missed(start)
             if timing_failed:
+                imu_fresh = gyro_fresh = False
+                pose.invalidate()
                 if not fault:
                     fault = 'TIMING'
                 # Nach Zeitverlust ist auch das Alter gepufferter RC-Worte
-                # unbekannt. Neutral und neue Freigabe vor manuellem Ersatz.
+                # unbekannt. Verwerfen; erst neue Frames duerfen steuern.
                 receiver.invalidate(time.ticks_ms())
             fresh = receiver.all_fresh(now)
             sticks = {}
@@ -357,7 +376,7 @@ def run(session=None):
                                                  outputs is not None, gate.armed, gate.count,
                                                  fresh, rx_state, pulses)
             # Konsolenausgabe erst nach dem begrenzten Aktuatorkommando.
-            if sensor_error is not None:
+            if sensor_error is not None and transition:
                 print('Automatik aus:', sensor_error)
             if mode != last_mode:
                 print('Zustand:', mode, 'Fehler:', fault or '-',
@@ -398,6 +417,7 @@ def run(session=None):
                     stop_requested = session.step(time.ticks_ms(), {
                         'mode': mode, 'fault': fault, 'angles': (roll, pitch, angles[2]),
                         'sample': sample, 'imu_fresh': imu_fresh, 'rx': rx_state,
+                        'gyro_fresh': gyro_fresh, 'tilt_valid': gyro_fresh and pose.tilt_valid,
                         'pulses': pulses, 'armed': gate.armed, 'fresh': fresh,
                         'period_us': measured_period, 'iteration_start_us': start})
                 except Exception as error:
@@ -470,6 +490,9 @@ def run(session=None):
             print('Abschalten unvollstaendig; kein Logexport. Versorgung trennen.')
         if session is not None and shutdown_ok:
             metadata['imu_first_saturation_raw'] = getattr(imu, 'first_saturation', None)
+            metadata['imu_saturation_samples'] = getattr(imu, 'saturation_counts', None)
+            metadata['tilt_recoveries'] = pose.recoveries
+            metadata['tilt_valid_at_stop'] = pose.tilt_valid
             metadata['partial_iteration_on_stop'] = in_iteration
             session.export_context = (metadata, diagnostics, stop_reason)
             session.can_export = True  # Erst jetzt PWM/Steuer-PIO/Aux-PIO/UART bestaetigt aus.

@@ -1,5 +1,38 @@
 # Aktueller Weg: Sensoren pruefen, manuell Daten sammeln, neu bewerten
 
+Update2026-10-27: Logger0.3.0 implementiert Vorab-Flashbudget und exakt
+gezaehlten Bodenexport,16-g/2000-Grad/s-IMU, getrennte Gyro-/Lageflags und
+langsamen Lage-Wiederfang.241 Hosttests bestanden; Board-RAM/Timing/Export
+noch offen. Jetzt [konkreter Bodenvergleich](LOGGER_030_TEST.md), danach
+naechster MANUAL-Datenflug. [Daten und Git](DATEN_UND_GIT.md): separates
+Flugarchiv empfohlen, aktueller Branch bleibt, keine Daten verschoben.
+Die folgenden Eintraege dokumentieren die vorherigen Befunde.
+
+Update2026-10-27 nach ersten echten Fluegen: [F1-Flugauswertung](testdaten/fluglogger/flights/F1/AUSWERTUNG.md)
+enthaelt sechs Discus-Fluege, davon fuenf vollstaendig, sechster durch FULL
+abgeschnitten.90.021 s Aufnahme,1800 schnelle Zeilen, kein Timing-/RC-Aussetzer
+nach Freigabe im817.961-s-Lauf; MANUAL-Kommandos stimmen. GPS/Baro gut nutzbar,
+183 schnelle IMU-Luecken und anhaltender Lagefehler nach Start. Gyroabschnitte
+separat nutzen, noch keine Winkelregler-/Gains-Abstimmung aus diesen Winkeln.
+Zweiter Export rot, danach ausgeschaltet: RAM verloren; Platzcheck fuehrender
+Verdacht, ohne Fehlermeldung unbestaetigt. Jetzt kleine Vorab-Flashpruefung und
+gezielte IMU-Messbereich-/Wiederfangarbeit vor weiteren Abstimmungsfluegen.
+Masse/CG der Zielkonfiguration messen;22 g Heckballast und schwererer BEC sind
+Besitzerangaben, Gesamtmasse unbekannt. Kein Logger-/Gains-Code hier geaendert.
+
+Update2026-10-27: Besitzer hat Quer/Hoehe/Seite auf230/400/350 us eingestellt
+und13/12/19..20 mm Ruderweg gemeldet, alle Ruder frei/funktionsfaehig.
+[R4-Innenraumlauf](testdaten/fluglogger/R4_response20_limits_indoor/AUSWERTUNG.md):
+211.419 s Lauf,41.691 s Aufnahme,833 schnelle Zeilen,20 Hz im Mittel,
+keine Timing-Trips/erneute RC-Sperre,2628 Achsenkommandos stimmen.
+IMU-Saettigung erneut erkannt (15 schnelle ungueltige Zeilen); MANUAL blieb
+aktiv. GPS-Fix in Aufnahme vorhanden, aber Qualitaet unter Ready-Schwellen.
+Aktuelle Kalibrierreferenz passt zu body_signs=(-1,-1,1). Schwerpunkt und
+Komponentensicherung bleiben laut Besitzer vor dem ersten echten Flug zu tun.
+Danach kurzer MANUAL-Datenflug; keine neue Loggerfunktion erforderlich.
+Trimmung und gemeinsame90-s-RAM-Kapazitaet mehrerer Fluege sind jetzt in der
+[Flugbedienung](ERSTER_MANUAL_DATENFLUG.md) konkret beschrieben.
+
 Update2026-10-25: R1/R2 und nun R3 mit GPS-/BOOT-Betrieb im20-Hz-Profil
 funktional bestanden, einschliesslich Vollpuffer und MANUAL-Kontinuitaet.
 R3 hat IMU-Saettigung bei berichteter kraeftiger Bewegung, neun ungueltige

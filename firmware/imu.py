@@ -4,12 +4,19 @@ Hauptklasse IMU: read() liefert (ax,ay,az,gx,gy,gz), accel in g, gyro in Grad/s;
 calibrate_gyro() prueft Ruhe und bestimmt Offsets fuer diesen Start.
 Logik: Sensoroffset/Skalierung -> rechtshaendige Koordinatentransformation ->
 Gyrooffset abziehen. Kennung 0x72 bleibt ausdruecklich nur im Tischtest erlaubt.
-Kein Servo wird hier angesteuert. Messbereich +/-2 g, +/-250 Grad/s.
+Kein Servo wird hier angesteuert. Bereiche/Umrechnung kommen aus config.SENSOR.
 """
 import math
 import time
 from struct import unpack_from
 from machine import Pin, I2C
+
+
+def ranges(settings):
+    """MPU-60x0-Registerwerte UND zugehoerige LSB pro physikalischer Einheit."""
+    accel = (2, 4, 8, 16).index(settings.get('accel_range_g', 2))
+    gyro = (250, 500, 1000, 2000).index(settings.get('gyro_range_dps', 250))
+    return accel << 3, gyro << 3, (16384, 8192, 4096, 2048)[accel], (131, 65.5, 32.8, 16.4)[gyro]
 
 
 def validate_transform(axes, signs):
@@ -27,6 +34,7 @@ def validate_transform(axes, signs):
 class IMU:
     def __init__(self, settings, allow_id72):
         self.settings = settings
+        accel_reg, gyro_reg, self.accel_lsb, self.gyro_lsb = ranges(settings)
         validate_transform(settings['body_axes'], settings['body_signs'])
         if any(s <= 0 for s in settings['acc_scale']):
             raise ValueError('Ungueltige Beschleunigungsskalierung')
@@ -42,14 +50,19 @@ class IMU:
         print('Sensor-ID:', hex(self.identity), 'nur Bodenversuch')
         self.write(0x6B, 0x80)
         time.sleep_ms(100)
-        for register, value in ((0x6B, 1), (0x1A, 3), (0x19, 9), (0x1B, 0), (0x1C, 0)):
+        for register, value in ((0x6B, 1), (0x1A, 3), (0x19, 9),
+                                (0x1B, gyro_reg), (0x1C, accel_reg)):
             self.write(register, value)
             if self.bus.readfrom_mem(self.addr, register, 1)[0] != value:
                 raise RuntimeError('Sensoreinstellung nicht uebernommen')
+        print('IMU-Bereiche: +/-', settings.get('accel_range_g', 2), 'g; +/-',
+              settings.get('gyro_range_dps', 250), 'Grad/s; Register bestaetigt')
         time.sleep_ms(100)
         self.buffer = bytearray(14)
         self.bias = (0.0, 0.0, 0.0)
         self.saturated = False
+        self.accel_saturated = self.gyro_saturated = False
+        self.saturation_counts = [0, 0]
         self.first_saturation = None  # Ein Rohsatz fuer die Diagnose, kein wachsender Log.
 
     def write(self, register, value):
@@ -60,15 +73,18 @@ class IMU:
         # Ein entpackter Rohsatz statt Python-Schleife und Generatoren je Messung:
         # weniger kurzlebige Objekte im langsamen IMU-/Lageabschnitt von F2.
         values = unpack_from('>7h', self.buffer)
-        self.saturated = (max(abs(values[0]), abs(values[1]), abs(values[2])) >= 32700 or
-                          max(abs(values[4]), abs(values[5]), abs(values[6])) >= 32095)
+        self.accel_saturated = max(abs(values[0]), abs(values[1]), abs(values[2])) >= 32700
+        self.gyro_saturated = max(abs(values[4]), abs(values[5]), abs(values[6])) >= 32095
+        self.saturated = self.accel_saturated or self.gyro_saturated
+        self.saturation_counts[0] += self.accel_saturated
+        self.saturation_counts[1] += self.gyro_saturated
         if self.saturated and self.first_saturation is None:
             self.first_saturation = values  # ax,ay,az,Temperatur,gx,gy,gz, alle roh.
         offset, scale = self.settings['acc_offset'], self.settings['acc_scale']
-        acc = ((values[0]/16384-offset[0])/scale[0],
-               (values[1]/16384-offset[1])/scale[1],
-               (values[2]/16384-offset[2])/scale[2])
-        gyro = (values[4]/131, values[5]/131, values[6]/131)
+        acc = ((values[0]/self.accel_lsb-offset[0])/scale[0],
+               (values[1]/self.accel_lsb-offset[1])/scale[1],
+               (values[2]/self.accel_lsb-offset[2])/scale[2])
+        gyro = (values[4]/self.gyro_lsb, values[5]/self.gyro_lsb, values[6]/self.gyro_lsb)
         x, y, z = self.settings['body_axes']
         sx, sy, sz = self.settings['body_signs']
         return (sx*acc[x], sy*acc[y], sz*acc[z],

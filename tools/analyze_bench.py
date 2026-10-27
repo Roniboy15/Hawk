@@ -181,11 +181,19 @@ def inspect_run(rows, summary, expected=None):
         if not events or events[-1]['mode'] != 'RX_TIMEOUT' or events[-1]['fresh']:
             issues.append('Am Testende kein fehlender RC-Kanal dokumentiert')
     elif expected == 'rx-recovery':
-        sequence = _sequence(events, ('MANUAL', 'RX_TIMEOUT', 'WAIT_NEUTRAL', 'MANUAL'))
-        if cfg['requested_mode'] != 'manual' or not sequence:
-            issues.append('MANUAL -> RX_TIMEOUT -> WAIT_NEUTRAL -> MANUAL fehlt')
-        elif not sequence[2]['fresh'] or sequence[2]['armed'] or sequence[3]['neutral_count'] < cfg['neutral_frames']:
-            issues.append('RX-Wiederfreigabe ohne erforderliche Neutralframes')
+        if cfg.get('rx_recovery_requires_neutral', True):
+            # Alte Berichte behalten ihre damalige Neutral-Wiederfreigaberegel.
+            sequence = _sequence(events, ('MANUAL', 'RX_TIMEOUT', 'WAIT_NEUTRAL', 'MANUAL'))
+            if cfg['requested_mode'] != 'manual' or not sequence:
+                issues.append('MANUAL -> RX_TIMEOUT -> WAIT_NEUTRAL -> MANUAL fehlt')
+            elif not sequence[2]['fresh'] or sequence[2]['armed'] or sequence[3]['neutral_count'] < cfg['neutral_frames']:
+                issues.append('RX-Wiederfreigabe ohne erforderliche Neutralframes')
+        else:
+            sequence = _sequence(events, ('MANUAL', 'RX_TIMEOUT', 'MANUAL'))
+            if cfg['requested_mode'] != 'manual' or not sequence:
+                issues.append('MANUAL -> RX_TIMEOUT -> MANUAL fehlt')
+            elif not sequence[-1]['fresh'] or not sequence[-1]['armed']:
+                issues.append('MANUAL-Wiederaufnahme ohne frischen, freigegebenen RX')
     elif expected in ('pitch-range', 'imu-fault', 'timing-fault'):
         reason = {'pitch-range': 'PITCH_RANGE', 'imu-fault': 'IMU_RUNTIME',
                   'timing-fault': 'TIMING'}[expected]

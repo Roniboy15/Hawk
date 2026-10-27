@@ -14,7 +14,7 @@ import sys
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/'firmware'))
 machine = types.ModuleType('machine')
@@ -37,7 +37,7 @@ from outputs import command
 from control import AxisController, Gate, select_mode
 from logger import RingLog
 from diagnostics import BenchDiagnostics, TimingStats, rx_snapshot
-from imu import IMU, validate_transform
+from imu import IMU, validate_transform, ranges
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/'tools'))
 from analyze_bench import inspect_run, read_csv, main as analyze_main
 
@@ -429,6 +429,17 @@ class PureTests(unittest.TestCase):
         self.assertFalse(gate.update(True, [0.6], True))
         self.assertTrue(gate.update(True, [0], True))
 
+    def test_manual_gate_needs_initial_neutral_but_resumes_on_new_non_neutral_frames(self):
+        gate = Gate(2, resume_after_loss=True)
+        for _ in range(3): self.assertFalse(gate.update(True,[0.6],True))
+        self.assertFalse(gate.update(True,[0],True))
+        self.assertTrue(gate.update(True,[0],True))
+        for _ in range(2):
+            self.assertFalse(gate.update(False,[0.6],False))
+            self.assertFalse(gate.update(True,[0.6],False))
+            self.assertTrue(gate.update(True,[0.6],True))
+        self.assertFalse(Gate(2,resume_after_loss=True).update(True,[0.6],True))
+
     def test_modes(self):
         self.assertEqual(select_mode('stabilize', True, True, 'IMU', True), 'MANUAL_FALLBACK')
         self.assertEqual(select_mode('stabilize', True, False, 'IMU', True), 'RX_TIMEOUT')
@@ -487,6 +498,75 @@ class PureTests(unittest.TestCase):
             pose.update((0, math.sin(roll), math.cos(roll), 0, 0, 0), 0.01)
         self.assertAlmostEqual(pose.angles()[0], 10, places=1)
 
+    def test_disc_rate_rotation_matches_exact_axis_angle_with_clipped_accel(self):
+        rates = (1200, -700, 450)
+        pose = Attitude(gain=2, recovery=config.ATTITUDE_RECOVERY)
+        pose.seed((0, 0, 1))
+        for _ in range(50):
+            pose.update((16, 0, 0)+rates, 0.02, use_accel=False)
+        speed = math.sqrt(sum(v*v for v in rates))
+        half_angle = math.radians(speed)/2
+        expected = (math.cos(half_angle),)+tuple(math.sin(half_angle)*v/speed for v in rates)
+        for actual, reference in zip(pose.q, expected):
+            self.assertAlmostEqual(actual, reference, places=10)
+        self.assertFalse(pose.accel_used)
+
+    def test_large_tilt_error_recovers_slowly_after_quiet_and_not_while_moving(self):
+        for angle in (60, 120, 180):
+            with self.subTest(angle=angle):
+                pose = Attitude(gain=1, recovery=config.ATTITUDE_RECOVERY)
+                pose.seed((0, 0, 1))
+                pose.q = quaternion(angle, 0, 0)
+                # Nicht ruhige Messungen duerfen die25-Grad-Sperre nicht umgehen.
+                for _ in range(300): pose.update((0, 0, 1, 0, 0, 10), 0.01)
+                self.assertFalse(pose.accel_used)
+                self.assertEqual(pose.quiet_s, 0)
+                pose.q = quaternion(angle, 0, 0)
+                for _ in range(199): pose.update((0, 0, 1, 0, 0, 0), 0.01)
+                self.assertAlmostEqual(pose.angles()[0], angle)
+                pose.update((0, 0, 1, 0, 0, 0), 0.01)
+                self.assertFalse(pose.tilt_valid)
+                self.assertLessEqual(abs(body_error(quaternion(angle,0,0),pose.q)[0]), 0.051)
+                for _ in range(4500): pose.update((0, 0, 1, 0, 0, 0), 0.01)
+                self.assertLess(abs(pose.angles()[0]), 1)
+                self.assertTrue(pose.tilt_valid)
+                self.assertEqual(pose.recoveries, 1)
+
+    def test_invalid_tilt_needs_quiet_recovery_even_if_accel_matches_again(self):
+        pose = Attitude(recovery=config.ATTITUDE_RECOVERY)
+        pose.seed((0,0,1))
+        pose.invalidate()
+        for _ in range(100): pose.update((0,0,1,0,0,0),0.01)
+        self.assertFalse(pose.tilt_valid)
+        for _ in range(101): pose.update((0,0,1,0,0,0),0.01)
+        self.assertTrue(pose.tilt_valid)
+
+    def test_imu_range_registers_readback_and_physical_scaling(self):
+        for accel, gyro in ((2,250),(4,500),(8,1000),(16,2000)):
+            settings = dict(config.SENSOR, accel_range_g=accel, gyro_range_dps=gyro,
+                            acc_offset=(0,0,0),acc_scale=(1,1,1),body_signs=(1,1,1))
+            ar,gr,al,gl = ranges(settings)
+            register = {0x75:0x68}
+            bus = Mock()
+            bus.scan.return_value = [0x68]
+            bus.writeto_mem.side_effect = lambda addr,reg,value:register.__setitem__(reg,value[0])
+            bus.readfrom_mem.side_effect = lambda addr,reg,n:bytes([register[reg]])
+            raw = (al,0,0,0,round(100*gl),0,0)
+            bus.readfrom_mem_into.side_effect = lambda addr,reg,target:target.__setitem__(
+                slice(None),b''.join((v & 65535).to_bytes(2,'big') for v in raw))
+            with patch('imu.Pin',Mock()), patch('imu.I2C',return_value=bus), \
+                 patch('imu.time.sleep_ms',create=True), contextlib.redirect_stdout(io.StringIO()):
+                sensor=IMU(settings,False)
+            self.assertEqual((register[0x1C],register[0x1B]),(ar,gr))
+            self.assertAlmostEqual(sensor.read()[0],1)
+            self.assertAlmostEqual(sensor.read()[3],100)
+            self.assertEqual(sensor.saturation_counts,[0,0])
+        self.assertEqual((ar,gr,al,gl),(24,24,2048,16.4))
+        bus.readfrom_mem.side_effect=lambda addr,reg,n:bytes([0x68 if reg==0x75 else 0])
+        with patch('imu.Pin',Mock()), patch('imu.I2C',return_value=bus), \
+             patch('imu.time.sleep_ms',create=True), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError,'nicht uebernommen'): IMU(settings,False)
+
     def test_body_error_direction_and_short_path(self):
         self.assertAlmostEqual(body_error(quaternion(10, 0, 0), quaternion(0, 0, 0))[0], -10)
         self.assertAlmostEqual(body_error(quaternion(179, 0, 0), quaternion(-179, 0, 0))[0], 2)
@@ -511,7 +591,7 @@ class PureTests(unittest.TestCase):
         self.assertLess(controller.update(0, 0, 10, 0.01, True), 0)
 
     def test_servo_trim_clamped(self):
-        settings = dict(config.SERVOS['roll'], trim=100, sign=-1)
+        settings = dict(config.SERVOS['roll'], center=1500, limit=200, trim=100, sign=-1)
         self.assertEqual(command(0, settings), 1600)
         self.assertEqual(command(-500, settings), 1700)
         self.assertEqual(command(500, settings), 1300)
@@ -569,6 +649,7 @@ class PureTests(unittest.TestCase):
         raw = (-1024, 6144, 13312, 0, -1310, 2620, 3930)
         payload = b''.join((value & 65535).to_bytes(2, 'big') for value in raw)
         sensor.buffer, sensor.addr, sensor.bias = bytearray(14), 0x68, (0, 0, 0)
+        sensor.accel_lsb, sensor.gyro_lsb, sensor.saturation_counts = 16384, 131, [0, 0]
         sensor.bus = types.SimpleNamespace(readfrom_mem_into=lambda address, register, target:
                                            target.__setitem__(slice(None), payload))
         self.assertEqual(sensor.read(), (0.0625, -0.5, 0.4375, 10.0, -20.0, 30.0))
@@ -584,6 +665,7 @@ class PureTests(unittest.TestCase):
                                            acc_scale=(1, 1, 1))
                     sensor.addr, sensor.bias = 0x68, (0, 0, 0)
                     sensor.buffer, sensor.first_saturation = bytearray(14), None
+                    sensor.accel_lsb, sensor.gyro_lsb, sensor.saturation_counts = 16384, 131, [0, 0]
                     raw = [0, 0, 16384, -32768, 0, 0, 0]  # Temperatur ist keine Saettigung.
                     def read(address, register, target):
                         target[:] = b''.join((v & 65535).to_bytes(2, 'big') for v in raw)
@@ -659,16 +741,21 @@ class FlowTests(unittest.TestCase):
                 angle = 10 if scenario == 'bank_right' else -10 if scenario == 'bank_left' else 0
                 return (0, math.sin(math.radians(angle)), math.cos(math.radians(angle)))
             def read(self):
-                if scenario == 'saturation':
+                if scenario in ('saturation', 'accel_saturation'):
                     self.saturated = state['iteration'] == 4
+                    if scenario == 'accel_saturation':
+                        self.accel_saturated = self.saturated
+                        self.gyro_saturated = False
                     if self.saturated:
                         self.first_saturation = (32700, 0, 16384, 0, 0, 0, 0)
                 if scenario == 'sensor_error' and state['iteration'] >= 4:
                     raise OSError('Sensor abgezogen')
-                if scenario in ('timing', 'timing_rearm') and state['iteration'] == 4:
+                if (scenario in ('timing', 'timing_rearm') and state['iteration'] == 4
+                        and not state.get('imu_delayed')):
+                    state['imu_delayed'] = True
                     Clock.value += 60000
                     state['stall_return_us'] = Clock.value
-                gz = 10 if scenario == 'yaw_left' else -10 if scenario == 'yaw_right' else 0
+                gz = 10 if scenario in ('yaw_left','accel_saturation') else -10 if scenario == 'yaw_right' else 0
                 gy = 100 if scenario == 'pitch_range' and state['iteration'] >= 4 else 0
                 if scenario == 'yaw_stopped':
                     gz = 50 if state['iteration'] < 5 else 0
@@ -712,7 +799,8 @@ class FlowTests(unittest.TestCase):
                     if scenario == 'initial_non_neutral':
                         c['pulse'] = 1800 if state['iteration'] <= 4 else 1500
                     if scenario == 'timing_rearm' and 5 <= state['iteration'] <= 7:
-                        c['pulse'] = 1500
+                        # MANUAL-Wiederkehr absichtlich mit gehaltenem Knueppel.
+                        if mode != 'manual': c['pulse'] = 1500
                         state['invalid'] = False
                 if scenario == 'missing_pitch' or (scenario == 'pitch_loss' and state['iteration'] >= 6):
                     self.channels['pitch']['pulse'] = None
@@ -746,7 +834,9 @@ class FlowTests(unittest.TestCase):
                 state['closed'] = True
                 if scenario == 'cleanup_error': raise OSError('PWM close failed')
 
-        level = {'roll': 0, 'pitch': 0, 'axes': [0, 1, 2], 'signs': [1, 1, 1],
+        # FakeIMU liefert bereits Koerperwerte; die Referenz passt zum Einbaustand.
+        level = {'roll': 0, 'pitch': 0, 'axes': list(config.SENSOR['body_axes']),
+                 'signs': list(config.SENSOR['body_signs']),
                  'offset': list(config.SENSOR['acc_offset']), 'scale': list(config.SENSOR['acc_scale'])}
         data = {'schema': 1, 'level': level,
                 'rc': {axis: {'min': 1000, 'center': 1500, 'max': 2000} for axis in axes}}
@@ -905,6 +995,18 @@ class FlowTests(unittest.TestCase):
         self.assertNotIn('MANUAL_FALLBACK', text)
         self.assertTrue(state['closed'])
 
+    def test_accel_clipping_keeps_current_gyro_and_manual_with_sticky_fault(self):
+        session=self.flight_session()
+        records,_,_=self.simulate('accel_saturation',mode='manual',session=session)
+        clipped=[c for c in session.contexts if not c['imu_fresh']]
+        self.assertEqual(len(clipped),1)
+        self.assertTrue(clipped[0]['gyro_fresh'])
+        self.assertTrue(clipped[0]['tilt_valid'])
+        self.assertGreater(session.contexts[-1]['angles'][2],clipped[0]['angles'][2])
+        self.assertTrue(session.contexts[-1]['imu_fresh'])
+        self.assertEqual(session.contexts[-1]['fault'],'IMU_RUNTIME')
+        self.assertNotEqual(records[-1][1]['roll'],0)
+
     def test_imu_failure_falls_back_to_manual(self):
         records, _, text = self.simulate('sensor_error')
         expected = normalize(1800, {'min': 1000, 'center': 1500, 'max': 2000},
@@ -979,6 +1081,17 @@ class FlowTests(unittest.TestCase):
         late = [offsets for (_, offsets), stamp in zip(records, state['write_times'])
                 if stamp >= state['stall_return_us']]
         self.assertTrue(all(offsets == {} for offsets in late))
+
+    def test_manual_resumes_after_timing_discard_without_centering_or_clearing_fault(self):
+        session=self.flight_session()
+        records,_,_=self.simulate('timing_rearm',mode='manual',session=session)
+        lost=[i for i,c in enumerate(session.contexts) if c['mode']=='RX_TIMEOUT']
+        self.assertTrue(lost)
+        recovered=session.contexts[max(lost)+1]
+        self.assertEqual(recovered['mode'],'MANUAL')
+        self.assertEqual(recovered['fault'],'TIMING')
+        self.assertEqual(recovered['rx'][0][0],1800)
+        self.assertTrue(any(o for i,o in records if i==5))
 
     def test_sensor_mode_has_no_pwm_even_after_timing_fault(self):
         records, state, _ = self.simulate('timing', mode='sensor')
@@ -1099,15 +1212,19 @@ class FlowTests(unittest.TestCase):
                 self.assertTrue(all(offsets == {} for iteration, offsets in records if iteration >= 4))
                 self.assertEqual(state['pulse_records'][-1], {'roll': 1500, 'pitch': 1500, 'yaw': 1500})
 
-    def test_each_channel_recovery_waits_for_new_neutral_frames(self):
+    def test_manual_each_channel_recovery_resumes_at_first_valid_frame_offcenter(self):
         for axis in ('roll', 'pitch', 'yaw'):
             with self.subTest(axis=axis):
                 records, state, _ = self.simulate('channel_recovery', axes=('roll', 'pitch', 'yaw'),
                                                  mode='manual', save_log=True, failed_axis=axis)
-                self.assertTrue(all(offsets == {} for iteration, offsets in records if 4 <= iteration <= 8))
-                self.assertTrue(next(offsets for iteration, offsets in records if iteration == 10))
+                self.assertTrue(all(offsets == {} for iteration, offsets in records if 4 <= iteration <= 5))
+                resumed=next(offsets for iteration, offsets in records if iteration == 6)
+                for a in ('roll','pitch','yaw'):
+                    expected=normalize(1800,{'min':1000,'center':1500,'max':2000},
+                                       config.RECEIVER[a]['sign'])*config.SERVOS[a]['limit']
+                    self.assertAlmostEqual(resumed[a],expected)
                 modes = [event['mode'] for event in state['reports'][0]['events']]
-                self.assertEqual(modes, ['WAIT_NEUTRAL', 'MANUAL', 'RX_TIMEOUT', 'WAIT_NEUTRAL', 'MANUAL'])
+                self.assertEqual(modes, ['WAIT_NEUTRAL', 'MANUAL', 'RX_TIMEOUT', 'MANUAL'])
 
     def test_offcenter_start_does_not_construct_pwm(self):
         _, state, _ = self.simulate('initial_non_neutral', axes=('roll', 'pitch', 'yaw'),
@@ -1195,6 +1312,18 @@ class AnalysisTests(unittest.TestCase):
                 with self.subTest(axis=axis, scenario=scenario):
                     rows, report = self.recorded_run(scenario, mode='manual', failed_axis=axis)
                     self.assertTrue(inspect_run(rows, report, profile)['verdict'].startswith('PASS'))
+
+    def test_legacy_recovery_reports_still_require_neutral_and_new_policy_checks_freshness(self):
+        old_gate=lambda frames,window,**kwargs:Gate(frames,window)
+        with patch.object(app,'Gate',old_gate):
+            rows,report=self.recorded_run('channel_recovery',mode='manual')
+        del report['configuration']['rx_recovery_requires_neutral']
+        self.assertTrue(inspect_run(rows,report,'rx-recovery')['verdict'].startswith('PASS'))
+        rows,report=self.recorded_run('channel_recovery',mode='manual')
+        recovered=report['events'][-1]
+        self.assertEqual(recovered['mode'],'MANUAL')
+        recovered['fresh']=False
+        self.assertEqual(inspect_run(rows,report,'rx-recovery')['verdict'],'FAIL')
 
     def test_initial_non_neutral_profile_requires_blocked_start(self):
         rows, report = self.recorded_run('initial_non_neutral', mode='manual')

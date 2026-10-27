@@ -1,116 +1,98 @@
-# Segelflug-Controller — Version 0.2.3, Bodenversuch
+# HAWK – Segelflugcontroller und Flugdatenlogger
 
-Modulare MicroPython-Firmware fuer RP2040-Zero und das bereits getestete
-MPU-kompatible SY-104-Modul (WHO_AM_I 0x72). Konventionelles Flugzeug mit
-getrenntem Hoehen-/Seitenruder; beide Querruder ueber ein Y-Kabel auf GP3.
-Das Projekt bereitet die Architektur fuer autonomes Thermikkreisen vor.
-Diese Version implementiert Sensoranzeige, manuellen Durchgang, Roll-/Nick-
-Winkelregelung und optional Gier-Drehratenregelung, aber keine Flugnavigation.
+MicroPython-Firmware fuer den Waveshare RP2040-Zero in einer Dream-Flight
+Libelle ohne Motor. MANUAL steuert Quer-, Hoehen- und Seitenruder ueber den
+MCU; IMU, BN-180-GPS und GY-63/MS5611 liefern Messdaten. Langfristiges Ziel
+ist autonomes Thermikkreisen. **Navigation und autonomer Kurvenflug sind noch
+nicht implementiert; die bisherigen Flugtests waren MANUAL-Datenfluege.**
 
-**Aktuell: Sensorfunktionstests und Vorbereitung manueller Datenfluege;
-autonome Flugfunktion ist noch nicht implementiert.** Der Segler hat
-kein Triebwerk und kein Gas. Laut Besitzer sind alle Servos montiert und an
-den vorgesehenen Kanaelen angeschlossen; Signalpegel und Ruderwirkungen
-muessen trotzdem gemessen/geprueft werden. Eine gemeinsame Stromleiste ist geplant.
-Die funktionierende Firmware und Geraetekalibrierung auf dem Mac sichern.
-Am 2026-10-13 meldet der Besitzer die Funktionstests aller drei Achsen bestanden;
-RX-/Servozeichen sind jetzt jeweils -1/-1. Die beigefuegten STABILIZE-Samples
-passen zur Regelrechnung. Elektrische Grenzen, Fehlerreaktionen und
-Worst-Case-Timing bleiben offen. Keine Flugabstimmung aus diesem Tischtest ableiten.
+## Aktueller Stand – 27. Oktober 2026
 
-## Start hier
+Entwicklung auf [`codex/manual-flight-tests-20hz`](https://github.com/Roniboy15/Hawk/tree/codex/manual-flight-tests-20hz).
+Diese README beschreibt den Stand des ausgewaehlten Branches. `main` ist der
+separat gepflegte Integrationsstand; ein Push auf den Entwicklungsbranch
+aktualisiert `main` nicht.
 
-**Aktueller Schritt:** Logger0.2.0 auf `codex/response-logger-20hz` hat
-R1/R2/R3 am Boden bestanden:20-Hz-Reaktionsdaten plus volle1-Hz-Snapshots,
-GPS-Fix, BOOT-Bordstart, CH3-Pause und geordneter Export. R3 speichert1800
-schnelle Zeilen (rund90 s), ohne Timing-Trip oder erneute RC-Sperre nach
-Startfreigabe. Kraeftige Bewegung erreicht den IMU-Messbereich: neun schnelle
-IMU-Datensaetze sind korrekt ungueltig, IMU_RUNTIME bleibt markiert, MANUAL
-laeuft weiter. Kein Nachweis von Flugstabilitaet oder abgestimmten Gains.
-225 Hosttests bestehen. [R3-Auswertung](docs/testdaten/fluglogger/R3_response20_manual_gps/AUSWERTUNG.md).
+| Stand | Nachweis und Grenze |
+| --- | --- |
+| Logger0.2.0 | R1–R4 am Boden, danach sechs echte MANUAL-Flugsegmente; letzter Flug durch FULL abgeschnitten |
+| Erster gespeicherter Fluglauf | 90.021 s Aufnahme,1800 schnelle Werte, keine Timing-/RC-Unterbrechung nach Freigabe; GPS/Barometer nutzbar |
+| IMU der Fluglaeufe | Messbereichsueberschreitungen und anhaltende Lagefehler nach Discusstarts; daraus keine Winkelregler-Gains ableiten |
+| Logger0.3.0 in diesem Branch | Speicherpruefung, groessere IMU-Bereiche, Lage-Wiederfang und MANUAL-Wiederaufnahme implementiert;244 Hosttests bestanden, Boardvergleich steht aus |
 
-`LOGGER_PROFILE='response20'` waehlt diese kurze Aufnahme, `'snapshot1'`
-weiterhin den1-Hz-Langzeitlogger. CH3 unten/oben pausiert/startet beide
-Datenstroeme ohne Flugtimer; voller Puffer beendet nur Aufnahme. Nach Landung
-CH3 unten, BOOT2 s, Tuerkis/alle Speichermeldungen abwarten, dann abschalten.
-Nur RAM im Flug; Flash im Steuerloop blockierte in L2 bis181.709 ms.
-`AUTO_START=False`, `START_MODE='sensor'`, `LOGGER_BOOT_MODE=None` bleiben
-Repository-Defaults. Fuer den bewussten MANUAL-Bordstart am Board
-`LOGGER_BOOT_MODE='manual'` waehlen, nicht AUTO_START=True.
-[Loggerprofile/Bedienung](docs/LOGGER_20HZ.md), [Bordstart und USB/BEC](docs/BORDSTART_LOGGER.md).
-Getesteter Stand:0c1e3ba. Weiter auf `codex/manual-flight-tests-20hz` fuer
-Einbau/Ruderwege und kurzen MANUAL-Datenflug. Besitzer nennt als Modell die
-Dream-Flight Libelle. [Konkrete Flugvorbereitung](docs/ERSTER_MANUAL_DATENFLUG.md),
-[Einbauplan](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
-[SENSOREN_TEST.md](docs/SENSOREN_TEST.md) bleibt die Anleitung fuer Wiederholungen.
-sensor_test.run('baro'/'gps'/'both') startet nur den separaten Funktionstest,
-ohne Servo-PWM. Der gemeinsame Logger ist in SENSOR und MANUAL am Boden geprueft;
-ein Kreisregler ist nicht implementiert. Der Besitzer moechte den
-bisherigen MCU-MANUAL-Durchgang nutzen und akzeptiert die MCU-Abhaengigkeit;
-Timing wird parallel weiter untersucht, ohne pauschale 100-Hz-Einstiegshuerde.
+[Flugauswertung mit Hoehenprofil und Flugwegen](docs/testdaten/fluglogger/flights/F1/AUSWERTUNG.md),
+[R4-Bodenbefund](docs/testdaten/fluglogger/R4_response20_limits_indoor/AUSWERTUNG.md),
+[Validierung](docs/VALIDIERUNG.md). Physische Nachweise fuer0.2.0 qualifizieren
+nicht automatisch die neue0.3.0-Firmware. MCU-Hardwaremessungen und bestaetigte
+Flugabstimmung bleiben getrennt von Softwaretests.
 
-Vorherige [Fehler-/Timingtests T1–T6](docs/FEHLER_TISCHTEST.md):
-T1-Wiederholung, T2 und T3 sind funktional bestaetigt. T5/T6 liefen laut Besitzer
-wie erwartet; die Daten bestaetigen Stabilisierung und PITCH_RANGE-Verriegelung.
-T4 bleibt bewusst offen. T6-Gier-Pulsverlust ist laut Besitzer durch einen
-herausgefallenen Stecker erklaert; die Ausgaenge reagierten mit Trimneutral.
-T5 erreicht im Mittel nur 74.92 Hz; Timing, erster T1-IMU_RUNTIME und MCU-
-Stromverlust bleiben offen. Tischteststand ist als 913a9e6 gesichert,
-Sensorabschluss als e177cb5 auf codex/gps-baro-bringup. Die anschliessende
-1-Hz-Loggerarbeit liegt auf codex/manual-flight-logger. Barometer/S1 ist funktional bestaetigt;
-GPS-Wiederholung gps_2 samt Konsole bestaetigt Fix und Bewegungsreaktion (S2).
-S3 bestaetigt gemeinsamen Betrieb und sauberen Stop. Sein alter Dateistand
-enthaelt nur die letzten 40.963 s; der neue 0.2.0-RAM-Puffer ist hostgeprueft,
-physisch noch zu pruefen. Hoehenspruenge im Gehlog erfordern einen Einbaucheck,
-keine Regleranpassung auf Verdacht:
-[S3-Auswertung](docs/testdaten/S3_gps_and_baro/AUSWERTUNG.md).
-[Aktuelle Auswertung](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T3_T5_T6.md),
-[Vorgaengerbefunde T1/T2](docs/testdaten/Tischtests_v0.2.3-bench/AUSWERTUNG_T1_T2.md).
+## Was der aktuelle Code kann
 
-1. [TESTBERICHT_2026-10-13.md](docs/TESTBERICHT_2026-10-13.md): abgeschlossener
-   Achsen-Funktionstest, Logauswertung und Grenzen des Nachweises.
-2. [NAECHSTE_SCHRITTE.md](docs/NAECHSTE_SCHRITTE.md): Sensorchecks, anschliessend
-   MANUAL-Datenlogger, Datenbewertung und spaetere Kreisfuehrung.
-3. [THONNY.md](docs/THONNY.md): Dateien hochladen, kalibrieren, Achsentests wiederholen.
-4. [GIT.md](docs/GIT.md): Repo auf dem Mac einrichten und kleine Aenderungen sichern.
-5. [ARCHITEKTUR.md](docs/ARCHITEKTUR.md): Module, Trimmung, Fehler und Thermik-Roadmap.
-6. [VALIDIERUNG.md](docs/VALIDIERUNG.md): getestete und noch offene Eigenschaften.
-7. [ROLL_TISCHTEST.md](docs/ROLL_TISCHTEST.md): Anleitung fuer erneute Rollpruefung.
-8. [PITCH_YAW_TISCHTEST.md](docs/PITCH_YAW_TISCHTEST.md): Anleitung fuer erneute
-   SENSOR/MANUAL/STABILIZE-Pruefung nach Umbauten.
-9. [VERSORGUNG_WARNHINWEISE.md](docs/VERSORGUNG_WARNHINWEISE.md): beste Diagnose
-   zum Versorgungsereignis und Warnhinweise fuer BEC 5 V @ 3 A / vier Servos.
-10. [EINBAU_UND_MANUAL_DATENFLUG.md](docs/EINBAU_UND_MANUAL_DATENFLUG.md):
-    Stromleisten, Sensorpins, IMU-Drehung und konkreter Logger-/Bodenlaufplan.
+- MANUAL mit kalibrierten PWM-Eingaengen, begrenzten Servoausgaengen und
+  Startfreigabe durch neutrale Knueppel. Nach erster Freigabe nimmt MANUAL
+  bei RX-/Timingwiederkehr neue gueltige Steuerframes ohne erneutes Zentrieren
+  an. Fehlende/alte Pulse steuern nicht; waehrend erkanntem RX-Ausfall stehen
+  die Ausgaenge auf Trimneutral. Programmneustart verlangt wieder Startfreigabe.
+- Roll-/Nick-Winkelregelung und Gier-Drehratenregelung fuer beaufsichtigte
+  Tests. Automatikfehler bleiben verriegelt; kein selbsttaetiger Wiedereinstieg
+  nach einem Fehler. STABILIZE behaelt vorerst die Neutral-Wiederfreigabe.
+- Loggerprofil `response20`:20-Hz-Roll/Nick/Gyro/RX/Servokommandos plus volle
+  1-Hz-Snapshots mit Beschleunigung, GPS, Barometer und Status. CH3 unten
+  pausiert, oben zeichnet auf. Alle Segmente teilen1800 schnelle Records,
+  also rund90 s **pro Start**, kein fester Flugtimer. FULL beendet nur Aufnahme.
+- Alternativ `snapshot1`:632 volle Records bei1 Hz fuer laengere Messungen.
+  Aufzeichnung in RAM, Export erst nach bestaetigtem Hardwarestop. BOOT2 s
+  bei pausierter Aufnahme beendet den Lauf. Vor Abschalten alle Speichermeldungen/
+  Tuerkis abwarten; Stromverlust vor Export verliert RAM-Daten.
 
-v0.2.1 verwirft RC-Puffer bei zu langer Pollpause/vollem FIFO, bewertet Pulsalter
-konservativ und verhindert stabilisierte Kommandos nach einer erkannten
-Deadline-Ueberschreitung. Timingfehler verlangen neue Neutralfreigabe vor dem
-manuellen Ersatz. Parameterpruefung und Abschaltversuche sind erweitert.
-Das ist Hostvalidierung, keine bestaetigte Hardwarequalifikation.
+0.3.0 prueft Flashplatz vor dem Start und zaehlt den Bodenexport genau durch,
+bei unveraenderter128-KiB-FS-Reserve. IMU nominal +/-16 g /2000 Grad/s mit
+Registerreadback; gueltige Gyrodrehung bleibt bei Accel-Clipping erhalten.
+Langsamer Lage-Wiederfang nutzt ruhige Messbedingungen, keine absolute
+Gierreferenz. Schnelles Format30 B, Gyro0.1 Grad/s, CSV/JSON-Schema3 mit
+getrennten Gyro-/Lageflags. Details und Grenzen in der Testanleitung.
 
-Der abgeschlossene v0.2.2-Stand startet SENSOR mit Roll+Nick+Gier; dort gibt es
-keine MCU-Servopulse. AUTO_START bleibt False. Das Besitzer-Testprofil war
-STABILIZE; zum erneuten Aktuatortest diesen Modus bewusst einstellen.
-DIRECTION_CHECKED_AXES blockiert STABILIZE fuer ungepruefte neue Achsen.
-Die Koerperkonvention bleibt +Roll rechts, +Nick Nase runter, +Gier Nase links;
-pitch_down zeigt daher negative Werte beim Nase-anheben. Kalibrierschema 1
-bleibt erhalten; calibrate_rc.run(('pitch',)) erfasst optional nur den neuen Kanal.
-Startphasen/Tickzeiten und Gyro-/Gier-Sollrate helfen bei Diagnose; CSV ist erweitert.
+## Jetzt weiterarbeiten
 
-v0.2.3 erfasst Zeitstatistiken jeder abgeschlossenen Iteration und bis zu 64
-Zustandswechsel im RAM. Nach Stop entstehen bench_<ticks>.csv (30 Spalten) und
-bench_<ticks>.json mit Konfiguration, Geraetekalibrierung, Runtime, Maxima und
-Ereignissen. tools/analyze_bench.py wertet das Paar auf dem Mac aus. Der explizite
-Starter bench_test.run(profile) kennt sensor, manual, stabilize und pitch-range;
-er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder her.
+1. [Konkreter0.3.0-Bodenvergleich und Dateiliste](docs/LOGGER_030_TEST.md):
+   zuerst SENSOR ohne Servoversorgung, Speicher fuer zwei/drei getrennte
+   volle Laeufe sowie MANUAL-Wiederaufnahme pruefen. Kalibrierung erhalten.
+2. [Bordstart und USB/BEC-Trennung](docs/BORDSTART_LOGGER.md),
+   [Einbau und Sensoranschluesse](docs/EINBAU_UND_MANUAL_DATENFLUG.md).
+3. [MANUAL-Flugbedienung, Trimmung und Ruderwege](docs/ERSTER_MANUAL_DATENFLUG.md).
+   Zielmasse/Schwerpunkt dokumentieren; Airspeed-Sensor folgt spaeter separat.
+4. [Naechste Schritte](docs/NAECHSTE_SCHRITTE.md),
+   [Architektur](docs/ARCHITEKTUR.md), [Thonny](docs/THONNY.md).
+
+Arbeitskonfiguration: `AUTO_START=False`, `LOGGER_PROFILE='response20'`,
+`LOGGER_BOOT_MODE='manual'`, `START_MODE='manual'`, Sensoroberseite oben/X nach
+hinten (`body_signs=(-1,-1,1)`). Fuer SENSOR zuerst den passenden Startmodus
+waehlen; `AUTO_START=True` ist nicht der Logger-Bordstart. Dateien auf dem
+Board koennen vom Git-Branch abweichen; Git uebertraegt keine Firmware.
+Ruderlimits230/400/350 us; Besitzerangaben Quer/Hoehe/Seite13/12/19–20 mm.
+
+## Flugdaten und Git
+
+Ausgewaehlte Logs, Berichte und Diagramme bleiben unter `docs/testdaten/` und
+werden hier mit Git versioniert. Ein separates Daten-Repository ist optional,
+keine Voraussetzung. Nicht jede kuenftige Flugdatei muss ins Code-Repository;
+Massendaten koennen spaeter extern gesichert werden. Jeder Lauf soll verwendete
+Firmware/Konfiguration und Flugnotizen nachvollziehbar zuordnen.
+
+Nach `main` gehoeren zusammen Firmware, Tests, Werkzeuge, README und relevante
+Dokumentation. Ein normaler Merge uebernimmt auch versionierte Datenaenderungen
+des Branches. Eine reine Firmwareauswahl waere ein eigener,
+gezielt zu pruefender Integrationsschritt. README und offene Testpunkte bei
+jeder Integration aktualisieren. [Datenstrategie](docs/DATEN_UND_GIT.md),
+[Git-Ablauf](docs/GIT.md).
 
 ## Dateien
+
 
 | Datei in firmware/ | Aufgabe / Einstieg |
 | --- | --- |
 | config.py | Einziger Ort fuer Pins, Achsen, Grenzwerte und Reglerparameter |
-| main.py | Default ohne Start; optionaler Loggerstart nach BOOT-Freigabe |
+| main.py | Startwahl; Logger wartet bei konfiguriertem Bordstart auf BOOT |
 | start_test.py | In Thonny ausfuehren, ruft app.run() auf |
 | bench_test.py | Explizite Tischtestprofile aus der Thonny-Shell |
 | app.py | Regelschleife und Zustandswechsel |
@@ -133,6 +115,7 @@ er waehlt das Testprofil im RAM und stellt danach die gespeicherten Werte wieder
 | flight_start.py | Explizit run('sensor'/'manual'), Puffer vor grossen Imports |
 | flight_logger.py | CH3, GPS/Baro, LED/BOOT, Export nach bestaetigtem Stop |
 | flight_records.py | 144-B-Encoder, 46 CSV-Spalten und reine Bodenstop-Logik |
+| response_log.py | Kompakter20-Hz-RAM-Strom, CSV nach Hardwarestop |
 
 Alle Python-Dateien enthalten am Anfang Aufgabe, Hauptfunktionen und Logik.
 Tests und Dokumentation gehoeren auf den Mac, nicht auf den MCU.
@@ -154,8 +137,13 @@ GP bedeutet GPIO-Nummer, niemals physische Pinposition.
 | Gas/Triebwerk | Nicht vorhanden | Keine Throttle-Funktion |
 | Receiver/Servo Plus | BEC 5 V | Ausreichende Strombelastbarkeit pruefen |
 | Alle GND | Gemeinsame Minusleiste | Auch MCU-GND anschliessen |
+| BN-180 TX / Versorgung | GP13 / geregelte5 V und GND | GPS-RX bleibt unbeschaltet |
+| GY-63 SDA / SCL | GP10 / GP11 | I2C1, VCC/PS an3V3, GND/CSB anGND |
+| CH3 Loggerbefehl | GP14 | Unten Pause, oben Aufnahme |
 
-MCU im USB-Test ueber USB versorgen, BEC-Plus nicht an dessen 5-V-Pin.
+MCU im USB-Test ueber USB versorgen, BEC-Plus nicht zugleich an dessen5-V-Pin.
+Bordbetrieb ueber geregelte BEC5 V nach Bordstartanleitung; BEC-/USB5 V nicht
+parallel verbinden. SDO des GY-63 bestimmt die im Treiber erkannte Adresse.
 Die Tabelle beschreibt die Software-Pinbelegung; der Logauszug ist kein
 unabhaengiger Nachweis der physischen Verkabelung oder Signalpegel.
 Bei allen zusaetzlichen RC-Eingaengen Signalpegel pruefen/anpassen. Die
@@ -166,14 +154,12 @@ Die beiden Querruder muessen mechanisch gegenlaeufig funktionieren. Ein
 Y-Kabel liefert beiden Servos denselben Puls und erlaubt keine getrennte
 Software-Differenzierung. Die vorhandene funktionierende Mechanik beibehalten.
 
-## Noch keine Flugfreigabe
+## Offene Grenzen
 
 - Die Kennung 0x72 und Registerantworten beweisen nicht den exakten Chiptyp.
 - Kein unabhaengiger Hardware-Bypass, kein getesteter Watchdog/Redundanzpfad.
-- Kein implementierter Mode-Kanal. Da kein Gas vorhanden ist, verfuegbare
-  Sender-/Receiverkanaele neu pruefen; keinen freien Kanal ungeprueft annehmen.
-  START_MODE ist eine Boden-Testeinstellung; Moduswahl und unabhaengigen
-  Hardware-Bypass vor einem Flug separat planen.
+- CH3 schaltet ausschliesslich die Aufnahme. MANUAL/STABILIZE werden vor dem
+  Start konfiguriert; kein implementierter Flugmodus-Umschalter am Sender.
 - Ein Receiver, der bei Funkverlust alte Pulse liefert, wird NICHT durch
   den Pulse-Timeout erkannt. Antenne, Reichweite und Receiver-Failsafe testen.
 - Nickwinkelhaltung bedeutet weder Hoehenhaltung noch Schutz vor Stall.

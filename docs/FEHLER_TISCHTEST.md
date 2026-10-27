@@ -143,14 +143,19 @@ trennen. Zu Beginn Schalter geschlossen und Knueppel neutral:
 3. Erwartet: RX_TIMEOUT und **alle drei** Pulswerte Trimneutral, hier 1500 us.
    Auch bei Nick-/Gierverlust muss der Rollausgang neutral werden.
 4. Schalter schliessen, Rollknueppel weiter aus der Mitte, **1 Sekunde** warten.
-   Erwartet: WAIT_NEUTRAL; alle drei Ausgaenge bleiben Trimneutral.
-5. Alle Knueppel zentrieren, **2 Sekunden** warten. Nach 25 neuen Neutralframes
-   wieder MANUAL. Kleines Kommando funktioniert wieder.
+   Ab Logger0.3.0 im MANUAL-Profil: mit neuen gueltigen Frames sofort MANUAL
+   und gehaltenes Kommando, ohne Zentrieren/Zuruecktrimmen. Solange ein
+   Steuerkanal fehlt, bleiben alle Ausgaenge Trimneutral.
+5. Kleines weiteres Kommando pruefen. Nur die erste Aktivierung verlangt
+   weiter25 Neutralframes. Alte Firmware verlangte diese auch nach Ausfall.
 6. Sofort stoppen/sichern. Die ganze Ereignisfolge nach erster Aktivierung
    innerhalb etwa 10 Sekunden halten, damit auch der CSV-Ring sie enthaelt.
 
-PASS: MANUAL -> RX_TIMEOUT -> WAIT_NEUTRAL -> MANUAL, keine Steuerkommandos
-waehrend der Sperre. Ordner logs/T4-roll/ usw.; jeweils `--expect rx-recovery`.
+PASS aktuell: MANUAL -> RX_TIMEOUT -> MANUAL, keine Steuerkommandos bei
+fehlenden/alten Pulsen, Wiederkehr auch mit nichtneutralem Knueppel.
+Ordner logs/T4-roll/ usw.; jeweils `--expect rx-recovery`. Das Werkzeug nutzt
+`rx_recovery_requires_neutral` im JSON; alte Berichte ohne Feld behalten die
+damalige WAIT_NEUTRAL-Pruefung. T4 ist dadurch noch nicht physisch bestanden.
 Die genaue Zeit vom letzten physischen RX-Puls bis zum Servoausgang benoetigt
 eine Signal-/Ausgangsmessung. Konsolenanzeige mit 4 Hz und Handschalter liefern
 diesen Nachweis nicht. RX_TIMEOUT_MS=100 ist eine Codegrenze, keine gemessene

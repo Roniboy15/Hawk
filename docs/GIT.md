@@ -1,5 +1,17 @@
 # Git fuer den aktuellen Hawk-Stand
 
+Update2026-10-27: weiter auf `codex/manual-flight-tests-20hz`.
+Besitzer beauftragt Commit/Push des aktuellen Standes. R4-/F1-Nachweise
+und Firmware/Tests/Dokumentation getrennt sichern. Ein separates Daten-Repo
+ist optional; ausgewaehlte Logs/Diagramme bleiben hier. Nach main gehoeren
+auch README, Tests, Werkzeuge und relevante Dokumentation; normaler Merge
+uebernimmt ebenfalls versionierte Daten. [Datenstrategie](DATEN_UND_GIT.md).
+Logger0.3.0 hat244 Hosttests, Boardvergleich noch offen. Kein main-Merge
+beauftragt; Push auf den Entwicklungsbranch aktualisiert die main-README nicht.
+R4/F1 sind als **a3d7ceb** separat gesichert; die anschliessende Aenderung
+enthaelt Logger0.3.0 samt Tests, aktueller README und Bedienung.
+Folgende Angaben sind historische Schritte.
+
 Update2026-10-25: Logger0.2.0 samt R1..R3 wurde als **0c1e3ba** auf
 `codex/response-logger-20hz` gesichert. Der Besitzer hat direkt davon den
 neuen Branch **codex/manual-flight-tests-20hz** fuer20-Hz-MANUAL-Datenfluege

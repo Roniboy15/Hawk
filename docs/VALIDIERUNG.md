@@ -1,5 +1,22 @@
 # Validierung — v0.2.3-bench
 
+2026-10-27 Ergaenzung:244 Hosttests bestehen. MANUAL verlangt nach erster
+Neutralfreigabe bei RX-/Timingwiederkehr nur neue gueltige Kanalframes, kein
+erneutes Zentrieren. Tests sichern nichtneutrale Wiederkehr pro Steuerachse,
+Startup-/Neustartschutz, keine Freigabe aus alten Frames und verriegelten
+Timingfault. Auswerter unterstuetzt neue und historische Wiederfreigabepolitik.
+Noch kein physischer Wiederkehrnachweis mit dieser Aenderung.
+
+2026-10-27: Logger0.3.0,241 Hosttests bestanden. Neue Regressionen pruefen
+Exportbudget fuer3 volle20-Hz-Laeufe, Dateischutz, Vorab-Abbruch, JSON-/CSV-
+Grenzen, IMU-Registerreadback/Skalierung, getrennte Accel-/Gyro-/Lagegueltigkeit,
+endliche schnelle Quaterniondrehung und langsamen60/120/180-Grad-Wiederfang.
+MANUAL laeuft bei Accel-Clipping weiter, Automatikfault bleibt verriegelt.
+Keine geaenderten Pins/Gains/Servo-/Timinggrenzen, kein MCU-Befehl ausgefuehrt.
+IOBase/json.dump anhand der MicroPython1.29-Dokumentation geprueft; kein
+aktueller nativer MicroPythonlauf. Board-RAM, Laufzeit und drei reale Exporte
+stehen aus: [Testanleitung](LOGGER_030_TEST.md). Aeltere Nachweise folgen.
+
 Letzter Hostlauf am 2026-10-22: 201 automatische Tests bestanden, CPython 3.9.6
 (106 Steuerungs-, 37 Sensor-, 30 Logger-/Puffer- und 28 Flugloggertests).
 
