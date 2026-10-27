@@ -1,0 +1,242 @@
+<?xml version='1.0' encoding='utf-8'?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Hawk MANUAL-Flüge 27.10.2026</name>
+    <description>Sechs getrennte 1-Hz-GPS-Flugwege. Flug 6 endet bei vollem Puffer. Die Linien liegen als Draufsicht auf dem Gelände, nicht auf einer rekonstruierten Flughöhe.</description>
+    <LookAt>
+      <longitude>8.499767</longitude>
+      <latitude>47.355188</latitude>
+      <range>180</range>
+      <tilt>0</tilt>
+      <heading>0</heading>
+    </LookAt>
+    <Style id="flight1">
+      <LineStyle>
+        <color>ff876b17</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ff876b17</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 1</name>
+      <Placemark>
+        <name>Flug 1: 14.413 s Aufnahme</name>
+        <styleUrl>#flight1</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.49976700,47.35518800,0 8.49976500,47.35518800,0 8.49976400,47.35518800,0 8.49976200,47.35518800,0 8.49976100,47.35518000,0 8.49981700,47.35519000,0 8.49994500,47.35515000,0 8.50006000,47.35514400,0 8.50012100,47.35517600,0 8.50002200,47.35523000,0 8.49994100,47.35520000,0 8.49987600,47.35517600,0 8.49983200,47.35514400,0 8.49981800,47.35513200,0 8.49981400,47.35513000,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F1 Aufnahmebeginn</name>
+        <styleUrl>#flight1</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.49976700,47.35518800,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F1 Aufnahmeende</name>
+        <styleUrl>#flight1</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.49981400,47.35513000,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Style id="flight2">
+      <LineStyle>
+        <color>ff1657b4</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ff1657b4</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 2</name>
+      <Placemark>
+        <name>Flug 2: 19.814 s Aufnahme</name>
+        <styleUrl>#flight2</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.49992400,47.35525000,0 8.49992300,47.35524800,0 8.49992700,47.35524800,0 8.49990600,47.35524800,0 8.49992800,47.35524000,0 8.49991400,47.35522400,0 8.49991600,47.35518400,0 8.49995500,47.35515000,0 8.50002600,47.35512400,0 8.50010800,47.35511360,0 8.50019520,47.35511360,0 8.50028400,47.35513600,0 8.50034500,47.35519600,0 8.50038100,47.35527000,0 8.50038080,47.35533000,0 8.50034100,47.35538000,0 8.50028100,47.35539600,0 8.50021500,47.35540000,0 8.50017100,47.35540000,0 8.50015500,47.35540400,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F2 Aufnahmebeginn</name>
+        <styleUrl>#flight2</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.49992400,47.35525000,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F2 Aufnahmeende</name>
+        <styleUrl>#flight2</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50015500,47.35540400,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Style id="flight3">
+      <LineStyle>
+        <color>ff368455</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ff368455</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 3</name>
+      <Placemark>
+        <name>Flug 3: 15.900 s Aufnahme</name>
+        <styleUrl>#flight3</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50005500,47.35536320,0 8.50005500,47.35536320,0 8.50004200,47.35536400,0 8.50010300,47.35534000,0 8.50007800,47.35527600,0 8.50008600,47.35522000,0 8.50011400,47.35519360,0 8.50018500,47.35516800,0 8.50028800,47.35516800,0 8.50037700,47.35520000,0 8.50044400,47.35526000,0 8.50044700,47.35533000,0 8.50039600,47.35537600,0 8.50033400,47.35539000,0 8.50027900,47.35537200,0 8.50024200,47.35534800,0 8.50023100,47.35534000,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F3 Aufnahmebeginn</name>
+        <styleUrl>#flight3</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50005500,47.35536320,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F3 Aufnahmeende</name>
+        <styleUrl>#flight3</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50023100,47.35534000,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Style id="flight4">
+      <LineStyle>
+        <color>ffa05389</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ffa05389</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 4</name>
+      <Placemark>
+        <name>Flug 4: 14.450 s Aufnahme</name>
+        <styleUrl>#flight4</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50008700,47.35533000,0 8.50008500,47.35533600,0 8.50006500,47.35535000,0 8.50007400,47.35533000,0 8.49997600,47.35532400,0 8.49992700,47.35530000,0 8.49992700,47.35527000,0 8.50001000,47.35526400,0 8.50011200,47.35527600,0 8.50020400,47.35531200,0 8.50026500,47.35537000,0 8.50024700,47.35542400,0 8.50020000,47.35542000,0 8.50018500,47.35538000,0 8.50018900,47.35536400,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F4 Aufnahmebeginn</name>
+        <styleUrl>#flight4</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50008700,47.35533000,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F4 Aufnahmeende</name>
+        <styleUrl>#flight4</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50018900,47.35536400,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Style id="flight5">
+      <LineStyle>
+        <color>ff543dc6</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ff543dc6</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 5</name>
+      <Placemark>
+        <name>Flug 5: 16.580 s Aufnahme</name>
+        <styleUrl>#flight5</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50015300,47.35529200,0 8.50015400,47.35529000,0 8.50015100,47.35529000,0 8.50012700,47.35530000,0 8.50014700,47.35528400,0 8.50007500,47.35531200,0 8.50003100,47.35532000,0 8.49999400,47.35530400,0 8.50002700,47.35526000,0 8.50011500,47.35523000,0 8.50021900,47.35522400,0 8.50032500,47.35525600,0 8.50039000,47.35532000,0 8.50037900,47.35538400,0 8.50031300,47.35540800,0 8.50024300,47.35540000,0 8.50020500,47.35539000,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F5 Aufnahmebeginn</name>
+        <styleUrl>#flight5</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50015300,47.35529200,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F5 Aufnahmeende</name>
+        <styleUrl>#flight5</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50020500,47.35539000,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+    <Style id="flight6">
+      <LineStyle>
+        <color>ff195d63</color>
+        <width>3</width>
+      </LineStyle>
+      <IconStyle>
+        <color>ff195d63</color>
+        <scale>0.7</scale>
+      </IconStyle>
+    </Style>
+    <Folder>
+      <name>Flug 6 – Ende fehlt / FULL</name>
+      <Placemark>
+        <name>Flug 6: 8.864 s Aufnahme</name>
+        <styleUrl>#flight6</styleUrl>
+        <LineString>
+          <tessellate>1</tessellate>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50012200,47.35529600,0 8.50012100,47.35530000,0 8.50007800,47.35531200,0 8.50009500,47.35539200,0 8.50010100,47.35547000,0 8.50006900,47.35550000,0 8.50003800,47.35549000,0 8.50005200,47.35545200,0 8.50008600,47.35542400,0 8.50013800,47.35540000,0</coordinates>
+        </LineString>
+      </Placemark>
+      <Placemark>
+        <name>F6 Aufnahmebeginn</name>
+        <styleUrl>#flight6</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50012200,47.35529600,0</coordinates>
+        </Point>
+      </Placemark>
+      <Placemark>
+        <name>F6 FULL – Flugende fehlt</name>
+        <styleUrl>#flight6</styleUrl>
+        <Point>
+          <altitudeMode>clampToGround</altitudeMode>
+          <coordinates>8.50013800,47.35540000,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

@@ -84,5 +84,13 @@ logger_ram_*.json
 !docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0.json
 !docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0.csv
 !docs/testdaten/fluglogger/R3_response20_manual_gps/flight_285838_0_response.csv
+# R4: Innenraumlauf mit vom Besitzer eingestellten und gemessenen Ruderwegen.
+!docs/testdaten/fluglogger/R4_response20_limits_indoor/flight_229208_0.json
+!docs/testdaten/fluglogger/R4_response20_limits_indoor/flight_229208_0.csv
+!docs/testdaten/fluglogger/R4_response20_limits_indoor/flight_229208_0_response.csv
+# Erste echte MANUAL-Fluege: ausgewaehlter unveraenderter Lauf mit sechs Segmenten.
+!docs/testdaten/fluglogger/flights/F1/flight_868672_0.json
+!docs/testdaten/fluglogger/flights/F1/flight_868672_0.csv
+!docs/testdaten/fluglogger/flights/F1/flight_868672_0_response.csv
 .venv/
 .thonny/
